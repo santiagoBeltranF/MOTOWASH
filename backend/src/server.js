@@ -9,6 +9,7 @@ import path from 'path'
 import routes from './routes/index.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
 import { testConnection, query } from './config/db.js'
+import { bootstrapAdmin } from './config/bootstrapAdmin.js'
 import logger from './utils/logger.js'
 
 const app = express()
@@ -74,6 +75,16 @@ const start = async () => {
     logger.error('Arranque abortado: no hay conexion con MySQL', { err: err.message })
     process.exit(1)
   }
+
+  // El administrador se crea aqui, no en database.sql, para que el repositorio
+  // no contenga credenciales. Es idempotente. Un fallo no debe impedir que la
+  // API arranque: se registra y se sigue.
+  try {
+    await bootstrapAdmin()
+  } catch (err) {
+    logger.error('No se pudo crear el administrador inicial', { err: err.message })
+  }
+
   app.listen(PORT, () => {
     logger.info(`🚀 MotoWash API running on port ${PORT}`)
     logger.info(`📋 Environment: ${process.env.NODE_ENV}`)

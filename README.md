@@ -46,35 +46,38 @@ docker compose down -v           # parar y BORRAR la base de datos
 
 ---
 
-## 🔑 Credenciales iniciales
+## 🔑 Administrador inicial
 
-| | |
-|---|---|
-| Usuario | `admin@motowash.com` |
-| Contraseña | `Admin123!` |
+**El repositorio no contiene ninguna credencial.** El administrador se crea en el
+arranque a partir de dos variables de tu `.env`:
 
-> ⚠️ Esta contraseña está en el repositorio (`backend/src/config/database.sql`), así que
-> es pública. Sirve para desarrollo. **Cámbiala antes de exponer la aplicación a internet.**
-
-El usuario semilla trae el **2FA desactivado** a propósito, para poder entrar sin tener
-configurado el envío de correo. Los clientes que se registran sí llevan 2FA activo.
-
-### Cómo cambiar la contraseña del admin
-
-No hay pantalla de cambio de contraseña todavía, así que se hace por base de datos:
-
-```bash
-# 1. Genera el hash de la contraseña nueva
-docker compose exec backend node -e "console.log(require('bcryptjs').hashSync('TU_PASSWORD_NUEVA', 12))"
-
-# 2. Aplícalo (pega el hash del paso anterior)
-docker compose exec db mysql -u root -p motowash_db \
-  -e "UPDATE users SET password='EL_HASH_DEL_PASO_1' WHERE email='admin@motowash.com';"
+```env
+ADMIN_EMAIL=admin@motowash.com
+ADMIN_PASSWORD=la_que_tu_elijas      # mínimo 8 caracteres
 ```
 
-### Cómo activar el 2FA del admin
+`backend/src/config/bootstrapAdmin.js` las lee, hashea la contraseña en runtime y crea el
+usuario. Es **idempotente**: si ese correo ya existe no lo toca, así que si cambias la
+contraseña desde la aplicación, un reinicio no la revierte.
 
-Requiere `MAIL_USER` y `MAIL_PASS` configurados en el `.env` (ver más abajo):
+Si dejas las variables vacías y no hay ningún administrador, la aplicación arranca igual
+pero avisa por log de que nadie podrá entrar al panel.
+
+El administrador se crea con el **2FA desactivado**, para poder entrar sin tener
+configurado el envío de correo. Los clientes que se registran sí llevan 2FA activo.
+
+### Cambiar la contraseña
+
+Desde la propia aplicación: **Mi perfil → Cambiar contraseña**. Pide la actual y exige
+mínimo 8 caracteres.
+
+> Los tokens ya emitidos siguen siendo válidos hasta que caduquen (`JWT_EXPIRES_IN`, 7
+> días por defecto): no hay lista negra de JWT. Si necesitas cortar todas las sesiones de
+> golpe, cambia el `JWT_SECRET` y reinicia el backend.
+
+### Activar el 2FA del administrador
+
+Requiere `MAIL_USER` y `MAIL_PASS` configurados (ver más abajo):
 
 ```bash
 docker compose exec db mysql -u root -p motowash_db \
@@ -118,6 +121,21 @@ docker compose down -v && docker compose up --build
 `DB_NAME` del `.env` debe coincidir con el `CREATE DATABASE` del script. Si no coinciden,
 el script crea una segunda base sobre la que el usuario de la aplicación no tiene
 permisos, y el backend arranca contra una base vacía.
+
+### Migraciones sobre una base que ya tiene datos
+
+Como `database.sql` no se vuelve a ejecutar, los cambios de esquema posteriores hay que
+aplicarlos a mano. Si vienes de una versión anterior:
+
+```bash
+docker compose exec db mysql -u root -p motowash_db -e "
+  CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);
+  ALTER TABLE users MODIFY two_fa_code VARCHAR(255);"
+```
+
+Ambas son operaciones online en MySQL 8: no bloquean escrituras ni obligan a parar la
+aplicación. La segunda es **obligatoria** — el código 2FA se guarda hasheado y un hash
+bcrypt ocupa 60 caracteres, así que sin ella el 2FA deja de funcionar.
 
 ---
 

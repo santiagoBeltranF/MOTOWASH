@@ -39,7 +39,12 @@ export const login = async (req, res, next) => {
     if (user.two_fa_enabled) {
       const code = generate2FACode()
       const expires = new Date(Date.now() + 10 * 60 * 1000)
-      await query('UPDATE users SET two_fa_code=?, two_fa_expires=? WHERE id=?', [code, expires, user.id])
+      // El codigo se guarda hasheado (hallazgo M6). Antes iba en claro, asi que
+      // quien pudiera leer la tabla users entraba como cualquier usuario
+      // durante los 10 minutos de vigencia. 10 rondas bastan: el codigo es de
+      // un solo uso, caduca pronto y ya hay contador de intentos.
+      const codeHash = await bcrypt.hash(code, 10)
+      await query('UPDATE users SET two_fa_code=?, two_fa_expires=? WHERE id=?', [codeHash, expires, user.id])
       const tempToken = uuidv4()
       tempTokens.set(tempToken, { userId: user.id, expires: Date.now() + 15 * 60 * 1000, intentos: 0 })
       await send2FACode(user.email, user.name, code)
@@ -60,10 +65,15 @@ export const verify2FA = async (req, res, next) => {
       tempTokens.delete(tempToken)
       return res.status(401).json({ message: 'Sesión expirada, inicia sesión de nuevo' })
     }
-    const user = await queryOne(
-      'SELECT * FROM users WHERE id=? AND two_fa_code=? AND two_fa_expires > NOW()',
-      [temp.userId, code]
+    // El codigo esta hasheado, asi que ya no se puede comparar en SQL: se trae
+    // el usuario por id y se contrasta con bcrypt.
+    const candidato = await queryOne(
+      'SELECT * FROM users WHERE id=? AND two_fa_expires > NOW()',
+      [temp.userId]
     )
+    const user = candidato?.two_fa_code && await bcrypt.compare(code, candidato.two_fa_code)
+      ? candidato
+      : null
     if (!user) {
       temp.intentos += 1
       // Agotados los intentos se invalida el codigo en la base y se descarta el
@@ -175,4 +185,38 @@ setInterval(purgarExpirados, 5 * 60 * 1000).unref()
 
 export const getMe = async (req, res) => {
   res.json({ user: req.user })
+}
+
+// Los dos endpoints de abajo faltaban: la pantalla de Perfil del cliente ya los
+// llamaba (`PUT /auth/profile` y `PUT /auth/password` en ProfilePage.jsx), pero
+// no estaban declarados en las rutas, asi que ambos botones respondian 404 y la
+// pantalla entera no servia para nada (hallazgo C8). El contrato que se
+// implementa aqui es exactamente el que el frontend ya enviaba.
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const { name, phone } = req.body
+    await query('UPDATE users SET name=?, phone=? WHERE id=?', [name.trim(), phone?.trim() || null, req.user.id])
+    const user = await queryOne('SELECT id, name, email, phone, role, is_active FROM users WHERE id=?', [req.user.id])
+    res.json({ user, message: 'Perfil actualizado' })
+  } catch (err) { next(err) }
+}
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+    const user = await queryOne('SELECT id, password FROM users WHERE id=?', [req.user.id])
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(401).json({ message: 'La contraseña actual no es correcta' })
+    }
+    if (await bcrypt.compare(newPassword, user.password)) {
+      return res.status(400).json({ message: 'La contraseña nueva debe ser distinta de la actual' })
+    }
+    const hashed = await bcrypt.hash(newPassword, 12)
+    await query('UPDATE users SET password=? WHERE id=?', [hashed, req.user.id])
+    logger.info(`Contrasena cambiada (usuario ${req.user.id})`)
+    // Los tokens ya emitidos siguen siendo validos hasta que caduquen: no hay
+    // lista negra de JWT. Queda anotado en AUDITORIA.md.
+    res.json({ message: 'Contraseña actualizada' })
+  } catch (err) { next(err) }
 }

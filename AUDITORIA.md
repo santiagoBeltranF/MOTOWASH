@@ -3,9 +3,9 @@
 Realizada el **2026-07-30** sobre el commit `95ffea2` (estado inicial del proyecto).
 1.290 líneas de backend, 21 archivos de frontend.
 
-**24 hallazgos:** 7 críticos, 8 importantes, 9 menores.
-*(C7 no salió de la lectura del código sino de probar el Bloque A: la auditoría original
-no lo detectó.)*
+**25 hallazgos:** 8 críticos, 8 importantes, 9 menores.
+*(C7 y C8 no salieron de leer el código sino de ejecutarlo: la auditoría original, hecha
+solo por lectura, no los detectó. Los dos dejaban pantallas enteras sin funcionar.)*
 
 | Estado | Significado |
 |---|---|
@@ -19,15 +19,21 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 ## 🔴 Críticos
 
-- [ ] **C1 — El admin por defecto no puede iniciar sesión**
-  `backend/src/config/database.sql`
+- [x] **C1 — El admin por defecto no puede iniciar sesión** ✅ *Fase 2 + Bloque C*
+  `backend/src/config/database.sql` → `backend/src/config/bootstrapAdmin.js`
   El hash original era un valor de ejemplo copiado de un tutorial y no correspondía a
   `Admin123!` ni a ninguna contraseña conocida (verificado con `bcrypt.compareSync`
   contra 8 candidatos). Nadie podía entrar en una instalación limpia.
-  *Parcial:* en la Fase 2 se reemplazó por un hash real y se desactivó el 2FA de ese
-  usuario semilla, lo justo para poder verificar el login. **Queda pendiente** sacar la
-  credencial del repositorio: script de arranque idempotente que lea `ADMIN_EMAIL` y
-  `ADMIN_PASSWORD` del entorno y haga el hash en runtime. → *Bloque C*
+  *Fase 2:* hash real y 2FA desactivado en el usuario semilla, lo justo para verificar
+  el login — pero la credencial seguía dentro del repositorio.
+  *Bloque C:* el `INSERT` sale de `database.sql`. Ahora `bootstrapAdmin()` se ejecuta al
+  arrancar, lee `ADMIN_EMAIL` y `ADMIN_PASSWORD` del entorno y hashea en runtime. Es
+  idempotente: si el correo ya existe **no lo toca**, así que una contraseña cambiada
+  desde la aplicación sobrevive a los reinicios. Si faltan las variables y no hay ningún
+  admin, avisa por log en vez de fallar en silencio.
+  *Verificado:* desde volumen limpio, log «Administrador creado» y login correcto; al
+  reiniciar, «Administrador ya existente, no se modifica». **Cero credenciales en el
+  repositorio** (`grep` de `Admin123!` y de hashes bcrypt en `backend/src/`: 0 archivos).
 
 - [ ] **C2 — Credenciales vivas en disco**
   `backend/.env`
@@ -40,12 +46,47 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   *Estado:* el usuario reporta haber revocado la App Password en Google y rotado el
   secreto. **Pendiente:** limpiar los valores muertos que siguen en el archivo.
 
-- [ ] **C3 — `express-validator` es inerte**
-  `backend/src/routes/index.js:19-23`
-  Los validadores están declarados en `/auth/register`, pero **`validationResult` no se
-  invoca en ningún archivo del proyecto**. Sin leer el resultado, los errores se anotan
-  en la request y el controlador sigue igual. No hay ninguna ruta validada en todo el
-  backend, ni siquiera la que lo aparenta. → *Bloque C*
+- [x] **C3 — `express-validator` es inerte** ✅ *Bloque C*
+  `backend/src/routes/index.js`, `middleware/validate.js`, `middleware/validators.js`
+  Los validadores estaban declarados en `/auth/register`, pero **`validationResult` no se
+  invocaba en ningún archivo**. Sin leer el resultado, los errores se anotaban en la
+  request y el controlador seguía igual: no había ninguna ruta validada en todo el
+  backend, ni siquiera la que lo aparentaba.
+  *Corregido:* middleware `validar` que lee `validationResult` y responde 400, más
+  cadenas de validación para las **15 rutas que reciben body o `:id`**.
+  **No hizo falta tocar el frontend**: las 14 pantallas ya muestran
+  `err.response?.data?.message`, así que basta con mantener `message` en la raíz de la
+  respuesta. El detalle por campo va aparte, en `errors`.
+  *Verificado* — 10 entradas inválidas, todas rechazadas con mensaje en español:
+
+  | Entrada | Respuesta |
+  |---|---|
+  | Correo `no-es-correo` | «Correo con formato inválido» |
+  | Contraseña de 3 caracteres | «La contraseña debe tener al menos 8 caracteres» |
+  | Precio `-5` | «El precio debe ser un número mayor o igual a 0» |
+  | Duración `0` | «La duración debe ser un número de minutos entre 1 y 1440» |
+  | Fecha `30-08-2026` | «Fecha con formato inválido. Se espera AAAA-MM-DD.» |
+  | Hora `99:99` | «Hora con formato inválido. Se espera HH:MM.» |
+  | Descuento `150` | «El descuento debe estar entre 0 y 100» |
+  | Promoción que acaba antes de empezar | «La fecha de fin debe ser posterior a la de inicio» |
+  | Estado `inventado` | «Estado no válido» |
+
+  Y los caminos válidos siguen funcionando: crear/editar servicio, crear promoción,
+  guardar horario y guardar ajustes, con los mismos cuerpos que envían las pantallas.
+
+- [x] **C8 — La pantalla de Perfil estaba entera rota** ✅ *Bloque C*
+  `backend/src/routes/index.js`, `controllers/authController.js`
+  **Hallazgo nuevo, no estaba en la auditoría original.** `ProfilePage.jsx` llamaba a
+  `PUT /auth/profile` y `PUT /auth/password`, pero **ninguna de las dos rutas existía**:
+  las dos respondían `404 Ruta no encontrada`. Los dos botones de la pantalla no hacían
+  nada. Salió al revisar qué envía cada pantalla para C3.
+  *Corregido:* implementados con el contrato exacto que el frontend ya enviaba —
+  `{ name, phone }` y `{ currentPassword, newPassword }`. El cambio de contraseña
+  verifica la actual, rechaza repetir la misma y hashea con 12 rondas.
+  *Verificado:* perfil se actualiza; contraseña actual incorrecta → 401; nueva igual a la
+  actual → 400; cambio correcto → la contraseña nueva entra y la vieja deja de servir.
+  ⚠️ Los JWT ya emitidos siguen siendo válidos tras cambiar la contraseña: no hay lista
+  negra de tokens. Relacionado con I8; queda anotado, no se corrige aquí.
 
 - [x] **C4 — Sin límite de tasa en los endpoints que envían correo** ✅ *Bloque A*
   `backend/src/routes/index.js`
@@ -261,9 +302,21 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   Se llama tras crear la cuenta en `verifyRegister`, sin `await`: la función captura sus
   propios errores, así que un fallo de SMTP no impide que la cuenta quede creada.
 
-- [ ] **M6 — El código 2FA se guarda en claro**
-  `users.two_fa_code` — quien lea la base puede iniciar sesión como cualquiera durante la
-  ventana de 10 minutos. → *Bloque C*
+- [x] **M6 — El código 2FA se guarda en claro** ✅ *Bloque C*
+  `users.two_fa_code` — quien leyera la base podía iniciar sesión como cualquiera durante
+  la ventana de 10 minutos.
+  *Corregido:* se guarda el hash bcrypt (10 rondas; el código es de un solo uso, caduca
+  en 10 minutos y ya tiene contador de intentos). La verificación ya no puede compararse
+  en SQL: se trae el usuario por id y se contrasta con `bcrypt.compare`.
+  La columna pasa de `VARCHAR(10)` a `VARCHAR(255)`.
+  *Verificado* con el flujo completo: lo almacenado es `$2a$10$Ccj5TjQFq8uny…`, 60
+  caracteres, y el código real (`494133`, leído del correo) supera la verificación.
+  ⚠️ **Instalación existente:** `database.sql` no se vuelve a ejecutar. Aplica la
+  migración a mano, o los hashes no caben y el 2FA deja de funcionar:
+  ```bash
+  docker compose exec db mysql -u root -p motowash_db \
+    -e "ALTER TABLE users MODIFY two_fa_code VARCHAR(255);"
+  ```
 
 - [ ] **M7 — Enumeración de usuarios por temporización**
   `backend/src/controllers/authController.js:15-18` — si el correo no existe,
@@ -299,18 +352,34 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 | | Total | Corregidos | Pendientes |
 |---|---|---|---|
-| 🔴 Críticos | 7 | 4 | 3 |
+| 🔴 Críticos | 8 | 7 | 1 |
 | 🟠 Importantes | 8 | 7 | 1 |
-| 🟡 Menores | 9 | 7 | 2 |
-| **Total** | **24** | **18** | **6** |
+| 🟡 Menores | 9 | 8 | 1 |
+| **Total** | **25** | **22** | **3** |
 
-Pendientes reales: **C1, C3, M6** (Bloque C).
-Los otros tres —I7, M7 y las partes (b)/(c) de I5— son decisiones conscientes de no
-corregir, documentadas en su entrada.
+**Los 3 pendientes son decisiones conscientes de no corregir**, no trabajo olvidado:
+
+| | Por qué se deja |
+|---|---|
+| **C2** | La parte que importaba —revocar la App Password y rotar el `JWT_SECRET`— está hecha. Lo que queda es que el secreto vive en un `.env` de un disco sincronizado a OneDrive; resolverlo de verdad pide un gestor de secretos, que no encaja en este despliegue. |
+| **I7** | `node-cron` dentro de Express. Correcto con una réplica; con varias el job se duplica. El `UPDATE` es idempotente, así que no corrompe datos. Documentado en el README. |
+| **I5 (b) y (c)** | El estado de 2FA vive en memoria del proceso: se pierde al reiniciar y no se comparte entre réplicas. La fuga de memoria (a) sí se corrigió. Resolver el resto exige mover el estado a la base o a Redis. |
+| **M7** | Enumeración de usuarios por temporización en el login. El mensaje de error ya es genérico; cerrar el canal temporal obliga a un `bcrypt.compare` señuelo. Impacto bajo. |
 
 ### Plan de la Fase 3
 
 - ✅ **Bloque A** — internas, sin tocar el contrato de la API: C4, C6, C7, I2, I3, I5a,
   I8, M1, M4, M5, M8, M9
 - ✅ **Bloque B** — integridad de datos: C5, I6
-- ⬜ **Bloque C** — requieren coordinar con el frontend: C3, C1, M6
+- ✅ **Bloque C** — coordinación con el frontend: C3, C1, C8, M6
+  *(al final no hizo falta cambiar ni un archivo del frontend: ver C3)*
+
+### Migraciones pendientes de aplicar en instalaciones existentes
+
+`database.sql` solo se ejecuta con el volumen vacío. Sobre una base con datos:
+
+```bash
+docker compose exec db mysql -u root -p motowash_db -e "
+  CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);
+  ALTER TABLE users MODIFY two_fa_code VARCHAR(255);"
+```

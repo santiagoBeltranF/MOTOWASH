@@ -1,8 +1,13 @@
 import express from 'express'
 import rateLimit from 'express-rate-limit'
-import { body } from 'express-validator'
 import { authenticate, requireAdmin } from '../middleware/auth.js'
-import { login, verify2FA, register, verifyRegister, getMe } from '../controllers/authController.js'
+import { validar } from '../middleware/validate.js'
+import {
+  idParam, loginRules, registerRules, codigoRules, perfilRules, passwordRules,
+  servicioRules, crearCitaRules, reagendarRules, estadoCitaRules,
+  crearPromocionRules, actualizarPromocionRules, horarioRules, settingsRules
+} from '../middleware/validators.js'
+import { login, verify2FA, register, verifyRegister, getMe, updateProfile, changePassword } from '../controllers/authController.js'
 import { getServices, createService, updateService, deleteService } from '../controllers/serviceController.js'
 import { getAvailableSlots, createAppointment, getAppointments, cancelAppointment, updateAppointmentStatus, rescheduleAppointment, getActivePendingAppointment } from '../controllers/appointmentController.js'
 import { getPromotions, getActivePromotion, createPromotion, updatePromotion, deletePromotion } from '../controllers/promotionController.js'
@@ -33,45 +38,43 @@ const verifyLimiter = rateLimit({
 })
 
 // Auth
-router.post('/auth/login', loginLimiter, login)
-router.post('/auth/verify-2fa', verifyLimiter, verify2FA)
-router.post('/auth/register', registerLimiter, [
-  body('email').isEmail(),
-  body('password').isLength({ min: 8 }),
-  body('name').trim().notEmpty()
-], register)
-router.post('/auth/verify-register', verifyLimiter, verifyRegister)
+router.post('/auth/login', loginLimiter, loginRules, validar, login)
+router.post('/auth/verify-2fa', verifyLimiter, codigoRules, validar, verify2FA)
+router.post('/auth/register', registerLimiter, registerRules, validar, register)
+router.post('/auth/verify-register', verifyLimiter, codigoRules, validar, verifyRegister)
 router.get('/auth/me', authenticate, getMe)
+router.put('/auth/profile', authenticate, perfilRules, validar, updateProfile)
+router.put('/auth/password', authenticate, passwordRules, validar, changePassword)
 
 // Services
 router.get('/services', authenticate, getServices)
-router.post('/services', authenticate, requireAdmin, createService)
-router.put('/services/:id', authenticate, requireAdmin, updateService)
-router.delete('/services/:id', authenticate, requireAdmin, deleteService)
+router.post('/services', authenticate, requireAdmin, servicioRules, validar, createService)
+router.put('/services/:id', authenticate, requireAdmin, idParam, servicioRules, validar, updateService)
+router.delete('/services/:id', authenticate, requireAdmin, idParam, validar, deleteService)
 
 // Appointments
 router.get('/appointments/slots', authenticate, getAvailableSlots)
 router.get('/appointments', authenticate, getAppointments)
-router.post('/appointments', authenticate, createAppointment)
-router.patch('/appointments/:id/cancel', authenticate, cancelAppointment)
-router.patch('/appointments/:id/status', authenticate, requireAdmin, updateAppointmentStatus)
-router.get('/appointments/active-pending', authenticate, getActivePendingAppointment) // <-- Nueva ruta
-router.patch('/appointments/:id/reschedule', authenticate, rescheduleAppointment)     
+router.post('/appointments', authenticate, crearCitaRules, validar, createAppointment)
+router.patch('/appointments/:id/cancel', authenticate, idParam, validar, cancelAppointment)
+router.patch('/appointments/:id/status', authenticate, requireAdmin, estadoCitaRules, validar, updateAppointmentStatus)
+router.get('/appointments/active-pending', authenticate, getActivePendingAppointment)
+router.patch('/appointments/:id/reschedule', authenticate, reagendarRules, validar, rescheduleAppointment)
 
 // Promotions
 router.get('/promotions', authenticate, requireAdmin, getPromotions)
 router.get('/promotions/active', authenticate, getActivePromotion)
-router.post('/promotions', authenticate, requireAdmin, createPromotion)
-router.put('/promotions/:id', authenticate, requireAdmin, updatePromotion)
-router.delete('/promotions/:id', authenticate, requireAdmin, deletePromotion)
+router.post('/promotions', authenticate, requireAdmin, crearPromocionRules, validar, createPromotion)
+router.put('/promotions/:id', authenticate, requireAdmin, actualizarPromocionRules, validar, updatePromotion)
+router.delete('/promotions/:id', authenticate, requireAdmin, idParam, validar, deletePromotion)
 
 // Schedule & Settings (Admin)
 router.get('/schedule', authenticate, getSchedule)
-router.put('/schedule', authenticate, requireAdmin, updateSchedule)
+router.put('/schedule', authenticate, requireAdmin, horarioRules, validar, updateSchedule)
 router.get('/settings', authenticate, requireAdmin, getSettings)
-router.put('/settings', authenticate, requireAdmin, updateSettings)
+router.put('/settings', authenticate, requireAdmin, settingsRules, validar, updateSettings)
 router.get('/clients', authenticate, requireAdmin, getClients)
-router.patch('/clients/:id/toggle', authenticate, requireAdmin, toggleClientStatus)
+router.patch('/clients/:id/toggle', authenticate, requireAdmin, idParam, validar, toggleClientStatus)
 
 // Reports (Admin)
 router.get('/reports/dashboard', authenticate, requireAdmin, getDashboardStats)

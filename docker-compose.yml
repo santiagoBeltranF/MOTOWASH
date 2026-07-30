@@ -63,6 +63,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en el .env de la raiz}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
 
+      # Administrador inicial. Se crea en el arranque, hasheando la contrasena
+      # en runtime, y solo si ese correo no existe todavia. El repositorio no
+      # contiene ninguna credencial.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?falta ADMIN_EMAIL en el .env de la raiz}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?falta ADMIN_PASSWORD en el .env de la raiz}
+
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USER: ${MAIL_USER:-}

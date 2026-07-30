@@ -15,7 +15,14 @@ CREATE TABLE IF NOT EXISTS users (
   role ENUM('admin', 'client') NOT NULL DEFAULT 'client',
   is_active BOOLEAN DEFAULT TRUE,
   two_fa_enabled BOOLEAN DEFAULT TRUE,
-  two_fa_code VARCHAR(10),
+  -- Guarda el hash bcrypt del codigo, no el codigo (hallazgo M6). Un hash
+  -- bcrypt ocupa 60 caracteres, de ahi el ancho.
+  --
+  -- Para una instalacion que ya tiene datos, este archivo no se vuelve a
+  -- ejecutar (solo corre con el volumen vacio). Aplicalo a mano:
+  --   docker compose exec db mysql -u root -p motowash_db \
+  --     -e "ALTER TABLE users MODIFY two_fa_code VARCHAR(255);"
+  two_fa_code VARCHAR(255),
   two_fa_expires DATETIME,
   email_verified BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -137,22 +144,15 @@ CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_
 -- DATOS INICIALES
 -- ============================================
 
--- Admin por defecto — usuario: admin@motowash.com  /  password: Admin123!
+-- El usuario administrador NO se crea aqui a proposito.
 --
--- El hash anterior era un valor de ejemplo copiado de un tutorial y NO
--- correspondia a ninguna contrasena conocida, asi que el admin no podia
--- iniciar sesion en una instalacion limpia. Este si es un hash real de
--- 'Admin123!' (bcrypt, 12 rondas), verificado con bcrypt.compare.
+-- Antes iba como INSERT en este archivo, con el hash bcrypt escrito al lado de
+-- la contrasena en claro dentro de un comentario. Eso metia una credencial en
+-- el repositorio: cualquiera que viera el codigo tenia acceso al panel.
 --
--- two_fa_enabled=FALSE solo para este usuario semilla, para poder entrar sin
--- depender de que MAIL_* este configurado. Los clientes que se registran
--- siguen con 2FA activo por el DEFAULT de la tabla.
---
--- ADVERTENCIA: esta contrasena es publica (esta en este archivo, en el repo).
--- Sirve para desarrollo. Cambiala en el primer login y activa el 2FA antes de
--- exponer la aplicacion a internet. Ver README.md.
-INSERT INTO users (name, email, password, role, is_active, email_verified, two_fa_enabled) VALUES
-('Administrador', 'admin@motowash.com', '$2a$12$XQMCX4jG5Rj/.HX5g.Tfo.msZ4UUAta/LISMtKNupGMcjjcM8/.kO', 'admin', TRUE, TRUE, FALSE);
+-- Ahora lo crea src/config/bootstrapAdmin.js en el arranque, leyendo
+-- ADMIN_EMAIL y ADMIN_PASSWORD del entorno y hasheando en runtime. Es
+-- idempotente: si el usuario ya existe, no lo toca. Ver README.md.
 
 -- Servicios por defecto
 INSERT INTO services (name, description, price, duration_minutes) VALUES
