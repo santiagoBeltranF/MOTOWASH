@@ -1,5 +1,14 @@
 # 🚀 Guía de Deploy en Hostinger
 
+> **Nota:** ahora también existe la vía Docker. `docker compose up --build` desde la raíz
+> levanta base de datos, API y frontend con nginx, sin instalar Node ni MySQL a mano —
+> ver `README.md`. Esta guía de Hostinger se conserva como alternativa y sigue siendo
+> válida.
+>
+> Dos detalles de este documento a tener en cuenta: el health check está en `/health`, no
+> en `/api/health` como dice el Paso «Verificar»; y las credenciales iniciales de abajo
+> corresponden al `database.sql` actualizado.
+
 ## Paso 1 — Preparar la base de datos MySQL
 
 1. Entra al panel de Hostinger
