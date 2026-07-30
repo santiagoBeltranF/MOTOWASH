@@ -60,14 +60,34 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   «quedan 4 / 3 / 2 intentos», «queda 1 intento», y el quinto responde «Demasiados
   intentos fallidos»; el sexto ya no encuentra el registro pendiente.
 
-- [ ] **C5 — Condición de carrera al reservar cupo**
-  `backend/src/controllers/appointmentController.js:131-157`
+- [x] **C5 — Condición de carrera al reservar cupo** ✅ *Bloque B*
+  `backend/src/controllers/appointmentController.js`
   Patrón consultar-decidir-insertar sin transacción ni bloqueo: dos peticiones
-  simultáneas leen el mismo conteo y ambas insertan, superando
-  `max_appointments_per_slot`. No hay `UNIQUE` en `appointments` que lo ataje en la base.
-  El helper `transaction()` de `config/db.js:28` está correctamente implementado y **no
-  lo usa nadie**. Mismo patrón en `rescheduleAppointment` (`:308-323`) y en el chequeo de
-  cita pendiente activa (`:110-118`). → *Bloque B*
+  simultáneas leían el mismo conteo y ambas insertaban, superando
+  `max_appointments_per_slot`. El helper `transaction()` de `config/db.js` estaba bien
+  implementado y no lo usaba nadie.
+  *Corregido:* `createAppointment` y `rescheduleAppointment` envuelven la comprobación de
+  cupo y la escritura en una transacción que abre con
+  `SELECT ... FROM settings WHERE key_name='max_appointments_per_slot' FOR UPDATE`.
+  El chequeo de cita pendiente activa entra también en el cerrojo.
+  Se bloquea **una fila que existe**, no el rango `(fecha, hora)`, y es deliberado: un
+  `FOR UPDATE` sobre el rango tomaría *gap locks*, que son compatibles entre sí, y las
+  dos transacciones acabarían en **interbloqueo** al intentar insertar. El coste es que
+  las reservas se serializan globalmente; con transacciones de cuatro consultas cortas es
+  irrelevante para este negocio. La evolución natural, si algún día hiciera falta, es una
+  tabla de franjas con una fila por `(fecha, hora)` y bloquear esa.
+  *Demostrado empíricamente*, 30 rondas de 5 peticiones simultáneas con
+  `max_appointments_per_slot=1`, precalentando los sockets para que las peticiones
+  llegaran juntas de verdad:
+
+  | | rondas que exceden el límite | máx. citas en una franja de 1 |
+  |---|---|---|
+  | Código anterior | **30/30** | **5** |
+  | Código nuevo | **0/30** | 1 |
+
+  Sin precalentar la conexión el bug no se reproducía: la ventana es de 1–2 ms y el coste
+  de abrir el socket bastaba para escalonar las peticiones. Es justo lo que hace peligroso
+  este tipo de fallo — no aparece en pruebas manuales.
 
 - [x] **C6 — Código 2FA con `Math.random()` y sin contador de intentos** ✅ *Bloque A*
   `backend/src/controllers/authController.js`
@@ -88,6 +108,22 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   `/api/reports/appointments` respondían **500 siempre**. En el panel eso deja rotas las
   pantallas de Citas, Clientes y los dos informes, y «Mis Citas» del cliente.
   Es preexistente: se comprobó con `git show HEAD:` que el código anterior hacía lo mismo.
+  **Es específico de MySQL 8+**, verificado sobre cinco motores con el mismo `mysql2 3.22.4`:
+
+  | Motor | `execute` + Number |
+  |---|---|
+  | MySQL 5.7.44 | ✅ OK |
+  | MySQL 8.0.46 | ❌ Incorrect arguments |
+  | MySQL 8.4.11 | ❌ Incorrect arguments |
+  | MariaDB 10.11.18 | ✅ OK |
+  | MariaDB 11.4.12 | ✅ OK |
+
+  La causa: mysql2 codifica todo `Number` de JS como `MYSQL_TYPE_DOUBLE`
+  (`lib/packets/execute.js`), MySQL 8 endureció la validación de tipos para `LIMIT` y lo
+  rechaza; MySQL 5.7 y MariaDB lo convertían a entero en silencio. Por eso las pantallas
+  afectadas **funcionaban en el entorno local** —desarrollado contra la MariaDB 10.4 de
+  XAMPP— y solo se rompieron al contenerizar con `mysql:8.0`. La Fase 2 no introdujo el
+  bug: lo destapó.
   *Corregido:* helper `sqlLimitOffset()` que interpola los enteros ya validados por
   `parsePaginacion` (1–100), sin superficie de inyección. El resto de parámetros siguen
   con placeholders.
@@ -153,13 +189,26 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   🔵 **(b) y (c) siguen abiertos por decisión:** son inherentes a guardar el estado en
   memoria. Resolverlos exige moverlo a la base o a Redis. Documentado en el README.
 
-- [ ] **I6 — `rescheduleAppointment` no valida horario de negocio ni fechas pasadas**
-  `backend/src/controllers/appointmentController.js:280-326`
-  Verifica permisos, estado, margen de 30 minutos y cupo, pero nunca comprueba que la
-  nueva fecha/hora esté en el futuro, sea día laborable, ni caiga dentro de
-  `schedule_config`. Se puede reagendar a las 03:00 de un domingo o a una fecha pasada.
-  `createAppointment` tiene el mismo hueco: confía en que el frontend solo ofrece slots
-  válidos. → *Bloque B*
+- [x] **I6 — No se validaba el horario de negocio en el servidor** ✅ *Bloque B*
+  `backend/src/controllers/appointmentController.js`
+  `rescheduleAppointment` verificaba permisos, estado, margen de 30 minutos y cupo, pero
+  nunca que la nueva fecha/hora estuviera en el futuro, fuera día laborable ni cayera
+  dentro de `schedule_config`. `createAppointment` tenía el mismo hueco: confiaba en que
+  el frontend solo ofreciera franjas válidas.
+  *Corregido:* helper `validarFranjaNegocio()` aplicado en ambos, que comprueba formato,
+  que la franja esté en el futuro, que el día esté abierto, y que el servicio **quepa
+  entero** antes del cierre (no solo que empiece antes).
+  *Verificado* en los dos endpoints:
+
+  | Caso | Respuesta |
+  |---|---|
+  | Fecha pasada | 400 «No puedes agendar en una fecha u hora que ya pasó» |
+  | Domingo | 400 «El negocio no abre ese día» |
+  | Lunes 07:00 | 400 «El negocio abre a las 08:00 ese día» |
+  | Sábado 15:00 (cierra 14:00) | 400 «…no alcanza a terminar antes del cierre (14:00)» |
+  | Lunes 16:00 con servicio de 180 min | 400 «…no alcanza a terminar antes del cierre (18:00)» |
+  | Hora con basura | 400 «Hora con formato inválido» |
+  | Lunes 10:00 con servicio de 60 min | 201 creada |
 
 - [ ] 🔵 **I7 — `node-cron` corre dentro del proceso de Express**
   `backend/src/server.js:44`
@@ -190,7 +239,7 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   `/api/health` responde: daba 404. Corregido en la documentación y contemplado en
   `nginx.conf`, que hace proxy de ambas rutas.
 
-- [x] **M3 — El README describía una estructura inexistente** ✅ *Fase 2*
+- [x] **M3 — El README describía una estructura inexistente** ✅ *Fase 2 — cerrado y confirmado*
   Listaba `backend/src/models/`, `frontend/src/hooks/`, `frontend/src/components/`,
   `frontend/public/` y `backend/src/config/seed.sql`, ninguno de los cuales existe.
   También citaba `node-otp / speakeasy` como dependencia de 2FA, que no está en
@@ -250,12 +299,12 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 | | Total | Corregidos | Pendientes |
 |---|---|---|---|
-| 🔴 Críticos | 7 | 3 | 4 |
-| 🟠 Importantes | 8 | 6 | 2 |
+| 🔴 Críticos | 7 | 4 | 3 |
+| 🟠 Importantes | 8 | 7 | 1 |
 | 🟡 Menores | 9 | 7 | 2 |
-| **Total** | **24** | **16** | **8** |
+| **Total** | **24** | **18** | **6** |
 
-Pendientes reales: **C1, C3, C5, M6** (Bloques B y C) y **I6** (Bloque B).
+Pendientes reales: **C1, C3, M6** (Bloque C).
 Los otros tres —I7, M7 y las partes (b)/(c) de I5— son decisiones conscientes de no
 corregir, documentadas en su entrada.
 
@@ -263,5 +312,5 @@ corregir, documentadas en su entrada.
 
 - ✅ **Bloque A** — internas, sin tocar el contrato de la API: C4, C6, C7, I2, I3, I5a,
   I8, M1, M4, M5, M8, M9
-- ⬜ **Bloque B** — integridad de datos: C5, I6
+- ✅ **Bloque B** — integridad de datos: C5, I6
 - ⬜ **Bloque C** — requieren coordinar con el frontend: C3, C1, M6

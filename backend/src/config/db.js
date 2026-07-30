@@ -39,6 +39,20 @@ export const queryOne = async (sql, params) => {
   return rows[0] || null
 }
 
+// Variantes de query/queryOne que operan sobre una conexion concreta. Son
+// necesarias dentro de transaction(): las funciones de arriba usan el pool y
+// cogerian una conexion distinta, quedando FUERA de la transaccion y sin ver
+// sus bloqueos.
+export const queryWith = async (conn, sql, params) => {
+  const [rows] = await conn.execute(sql, params)
+  return rows
+}
+
+export const queryOneWith = async (conn, sql, params) => {
+  const rows = await queryWith(conn, sql, params)
+  return rows[0] || null
+}
+
 export const transaction = async (callback) => {
   const conn = await pool.getConnection()
   await conn.beginTransaction()
