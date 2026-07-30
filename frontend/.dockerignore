@@ -1,0 +1,23 @@
+# Dependencias: se instalan dentro de la imagen con `npm ci`
+node_modules
+npm-debug.log*
+
+# Build previo: se genera dentro de la imagen
+dist
+
+# Secretos y configuracion local — VITE_API_URL se pasa como build arg
+.env
+.env.*
+!.env.example
+
+# Git / editores / SO
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker (nginx.conf SI debe copiarse, por eso no se excluye)
+Dockerfile
+.dockerignore

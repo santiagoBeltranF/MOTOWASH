@@ -1,0 +1,24 @@
+# Dependencias: se instalan dentro de la imagen con `npm ci`
+node_modules
+npm-debug.log*
+
+# Secretos y configuracion local — las variables se pasan por Compose
+.env
+.env.*
+!.env.example
+
+# Logs locales
+logs
+*.log
+
+# Git / editores / SO
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
