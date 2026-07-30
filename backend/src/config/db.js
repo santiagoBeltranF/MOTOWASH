@@ -11,7 +11,21 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  timezone: '+00:00',
+  // 'local' = la zona del proceso Node, que en los contenedores es
+  // America/Bogota (TZ en docker-compose.yml).
+  //
+  // Antes estaba en '+00:00', lo que hacia que mysql2 serializara los objetos
+  // Date a UTC al mandarlos como parametro. Como las citas y las promociones se
+  // guardan en hora de pared local (el <input type="datetime-local"> del panel
+  // manda "2026-07-30T20:00", sin zona), esas comparaciones quedaban 5 horas
+  // corridas: /promotions/active veia una promocion activa que /services no.
+  //
+  // Con 'local' ambos extremos hablan la misma hora. Las columnas DATE vuelven
+  // como medianoche local, que para UTC-5 cae el mismo dia en UTC, asi que el
+  // patron `fecha.split('T')[0]` que usa el frontend sigue dando el dia
+  // correcto. Ojo si algun dia se despliega en una zona con offset POSITIVO:
+  // ahi la medianoche local cae el dia anterior en UTC y ese patron fallaria.
+  timezone: 'local',
   charset: 'utf8mb4'
 })
 

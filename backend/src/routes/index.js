@@ -13,15 +13,34 @@ const router = express.Router()
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { message: 'Demasiados intentos. Intenta en 15 minutos.' } })
 
+// /auth/register dispara un envio de correo a una direccion arbitraria en cada
+// peticion. Sin limite es una bomba de correo con nuestro dominio como
+// remitente, y Gmail acaba suspendiendo la cuenta. La ventana es de una hora
+// porque registrarse es algo que se hace una vez, no repetidamente.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { message: 'Demasiados registros desde esta conexión. Intenta en una hora.' }
+})
+
+// Limite por IP para los dos endpoints de verificacion. Es la segunda barrera
+// contra la fuerza bruta del codigo de 6 digitos; la primera es el contador de
+// intentos por codigo que lleva authController (MAX_INTENTOS_CODIGO).
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { message: 'Demasiados intentos de verificación. Intenta en 15 minutos.' }
+})
+
 // Auth
 router.post('/auth/login', loginLimiter, login)
-router.post('/auth/verify-2fa', verify2FA)
-router.post('/auth/register', [
+router.post('/auth/verify-2fa', verifyLimiter, verify2FA)
+router.post('/auth/register', registerLimiter, [
   body('email').isEmail(),
   body('password').isLength({ min: 8 }),
   body('name').trim().notEmpty()
 ], register)
-router.post('/auth/verify-register', verifyRegister)
+router.post('/auth/verify-register', verifyLimiter, verifyRegister)
 router.get('/auth/me', authenticate, getMe)
 
 // Services

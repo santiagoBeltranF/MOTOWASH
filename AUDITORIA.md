@@ -3,7 +3,9 @@
 Realizada el **2026-07-30** sobre el commit `95ffea2` (estado inicial del proyecto).
 1.290 líneas de backend, 21 archivos de frontend.
 
-**23 hallazgos:** 6 críticos, 8 importantes, 9 menores.
+**24 hallazgos:** 7 críticos, 8 importantes, 9 menores.
+*(C7 no salió de la lectura del código sino de probar el Bloque A: la auditoría original
+no lo detectó.)*
 
 | Estado | Significado |
 |---|---|
@@ -45,12 +47,18 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   en la request y el controlador sigue igual. No hay ninguna ruta validada en todo el
   backend, ni siquiera la que lo aparenta. → *Bloque C*
 
-- [ ] **C4 — Sin límite de tasa en los endpoints que envían correo**
-  `backend/src/routes/index.js:14-24`
-  `loginLimiter` solo cubre `/auth/login`. Quedan abiertos `/auth/register` (cada POST
+- [x] **C4 — Sin límite de tasa en los endpoints que envían correo** ✅ *Bloque A*
+  `backend/src/routes/index.js`
+  `loginLimiter` solo cubría `/auth/login`. Quedaban abiertos `/auth/register` (cada POST
   dispara un correo a una dirección arbitraria → bomba de correo con tu dominio como
   remitente, y Gmail acaba suspendiendo la cuenta), `/auth/verify-2fa` y
-  `/auth/verify-register` (fuerza bruta del código de 6 dígitos). → *Bloque A*
+  `/auth/verify-register` (fuerza bruta del código de 6 dígitos).
+  *Corregido:* `registerLimiter` (5/hora) y `verifyLimiter` (15/15 min), más un contador
+  de intentos **por código** en `authController` (`MAX_INTENTOS_CODIGO = 5`): al quinto
+  fallo se invalida el código en la base y se descarta el token temporal.
+  *Verificado* end-to-end con un servidor SMTP desechable: los mensajes van contando
+  «quedan 4 / 3 / 2 intentos», «queda 1 intento», y el quinto responde «Demasiados
+  intentos fallidos»; el sexto ya no encuentra el registro pendiente.
 
 - [ ] **C5 — Condición de carrera al reservar cupo**
   `backend/src/controllers/appointmentController.js:131-157`
@@ -61,13 +69,29 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   lo usa nadie**. Mismo patrón en `rescheduleAppointment` (`:308-323`) y en el chequeo de
   cita pendiente activa (`:110-118`). → *Bloque B*
 
-- [ ] **C6 — Código 2FA con `Math.random()` y sin contador de intentos**
-  `backend/src/controllers/authController.js:10`
+- [x] **C6 — Código 2FA con `Math.random()` y sin contador de intentos** ✅ *Bloque A*
+  `backend/src/controllers/authController.js`
   `Math.random()` no es criptográficamente seguro: V8 usa xorshift128+ y observando
   salidas sucesivas se puede reconstruir el estado interno y predecir códigos futuros.
-  Sin contador de intentos (ver C4), un código de 6 dígitos con ventana de 10 minutos es
-  fuerza bruta viable — el atacante ya tiene el `tempToken` porque él inició el flujo.
-  → *Bloque A*
+  *Corregido:* `crypto.randomInt(100000, 1000000)`. El contador de intentos va en C4.
+  *Verificado:* 20.000 códigos generados, todos de 6 dígitos, rango 100018–999993,
+  19.786 valores distintos. Código real recibido por correo en la prueba: `561647`.
+
+- [x] **C7 — Los cuatro endpoints paginados devolvían 500** ✅ *Bloque A*
+  `appointmentController`, `settingsController`, `reportController` (×2)
+  **Hallazgo nuevo, no estaba en la auditoría original.** `config/db.js` usa
+  `pool.execute()`, es decir sentencias preparadas, y el protocolo de preparadas de
+  MySQL 8 rechaza un `Number` como parámetro de `LIMIT`: devuelve *Incorrect arguments to
+  mysqld_stmt_execute*. El código hacía `params.push(parseInt(limit), parseInt(offset))`,
+  que produce justo un `Number`.
+  Efecto: `/api/appointments`, `/api/clients`, `/api/reports/clients` y
+  `/api/reports/appointments` respondían **500 siempre**. En el panel eso deja rotas las
+  pantallas de Citas, Clientes y los dos informes, y «Mis Citas» del cliente.
+  Es preexistente: se comprobó con `git show HEAD:` que el código anterior hacía lo mismo.
+  *Corregido:* helper `sqlLimitOffset()` que interpola los enteros ya validados por
+  `parsePaginacion` (1–100), sin superficie de inyección. El resto de parámetros siguen
+  con placeholders.
+  *Verificado:* los cuatro pasan de 500 a 200.
 
 ---
 
@@ -83,26 +107,32 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   *Verificado:* con la BD apagada el backend registra `⏳ MySQL aun no responde
   (intento 1/30)` y reconecta solo al volver la base.
 
-- [ ] **I2 — Desfase de zonas horarias** (parcialmente corregido)
+- [x] **I2 — Desfase de zonas horarias** ✅ *Fase 2 + Bloque A*
   El negocio está en Armenia, Quindío (UTC−5, sin horario de verano).
   *Corregido en Fase 2:* `TZ=America/Bogota` explícito en los tres contenedores, con
   `tzdata` instalado en las imágenes Alpine (sin ese paquete la variable se ignora en
   silencio). Con eso `NOW()` de MySQL y el parseo de `new Date("...T...")` en Node ya
   operan en hora local, lo que arregla el cron de promociones y las validaciones de
   horario de las citas.
-  **Pendiente:** el pool sigue declarando `timezone: '+00:00'` (`config/db.js:14`), así
-  que los dos sitios que pasan un objeto `Date` como parámetro siguen desfasados 5 horas:
-  `serviceController.js:14-17` y `appointmentController.js:138-141`.
-  *Demostrado:* con una promoción de ventana 10:00–12:00 siendo las 10:52,
-  `/promotions/active` la ve activa y `/services` no la ve. → *Bloque A*
+  *Corregido en Bloque A:* el pool pasa de `timezone: '+00:00'` a `'local'`, y los dos
+  sitios que pasaban un objeto `Date` como parámetro (`serviceController` y
+  `appointmentController`) ahora comparan con `NOW()` de MySQL, igual que
+  `/promotions/active`. Los tres usan el mismo criterio.
+  *Verificado con el caso que lo destapó:* promoción de ventana 11:00–12:00 consultada a
+  las 11:29. Antes `/promotions/active` la veía activa y `/services` devolvía `null`;
+  ahora los tres sitios coinciden y el descuento se aplica.
+  ⚠️ El patrón `fecha.split('T')[0]` que usa el frontend funciona porque la medianoche
+  local de UTC−5 cae el mismo día en UTC. En una zona con offset **positivo** fallaría.
 
-- [ ] **I3 — Winston escribe a archivos dentro del contenedor**
-  `backend/src/utils/logger.js:24-34`
+- [x] **I3 — Winston escribe a archivos dentro del contenedor** ✅ *Bloque A*
+  `backend/src/utils/logger.js`
   Dos `File` transports a `logs/`. En Docker eso engorda la capa de escritura, se pierde
   al recrear el contenedor y esconde los logs de `docker compose logs`. Además
-  `format.colorize()` inyecta códigos ANSI cuando no hay TTY.
-  *Parche temporal en Fase 2:* el Dockerfile crea `logs/` con `chown node` para que el
-  transport no aborte con EACCES bajo el usuario no-root. → *Bloque A*
+  `format.colorize()` inyectaba códigos ANSI aunque no hubiera TTY.
+  *Corregido:* los transports de archivo solo se activan con `NODE_ENV !== 'production'`,
+  y `colorize()` solo si `process.stdout.isTTY`. Con eso sobra el parche del
+  `mkdir logs && chown` que la Fase 2 había puesto en el Dockerfile, y se ha quitado.
+  *Verificado:* los logs pasan de `[[32minfo[39m]` a `[info]` limpio.
 
 - [x] **I4 — `trust proxy` ausente** ✅ *Fase 2*
   `backend/src/server.js`
@@ -112,13 +142,16 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   (1 = solo nginx), no `true`, que permitiría falsear la IP inyectando `X-Forwarded-For`.
   *Verificado:* 5 intentos → 429 al sexto; con `X-Forwarded-For` falseado sigue en 429.
 
-- [ ] **I5 — Estado de autenticación en memoria del proceso**
-  `backend/src/controllers/authController.js:8` y `:59`
-  `tempTokens` y `pendingRegistrations` son `Map` en memoria. (a) Nunca se purgan las
-  entradas expiradas — solo se borran en el camino feliz, así que crecen sin límite con
+- [x] **I5 — Estado de autenticación en memoria del proceso** ✅ *Bloque A (alcance acordado)*
+  `backend/src/controllers/authController.js`
+  `tempTokens` y `pendingRegistrations` son `Map` en memoria. (a) Nunca se purgaban las
+  entradas expiradas — solo se borran en el camino feliz, así que crecían sin límite con
   cada login abandonado. (b) Al reiniciar se pierden los 2FA y registros en vuelo.
   (c) Con varias réplicas, la verificación puede llegar a un proceso que no tiene el token.
-  → *Bloque A: solo la purga (a). Lo de réplicas queda documentado, no se resuelve ahora.*
+  *Corregido (a):* barrido con `setInterval` cada 5 minutos, con `.unref()` para no
+  mantener vivo el proceso al apagarse.
+  🔵 **(b) y (c) siguen abiertos por decisión:** son inherentes a guardar el estado en
+  memoria. Resolverlos exige moverlo a la base o a Redis. Documentado en el README.
 
 - [ ] **I6 — `rescheduleAppointment` no valida horario de negocio ni fechas pasadas**
   `backend/src/controllers/appointmentController.js:280-326`
@@ -135,20 +168,22 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   *Decisión:* no se corrige. Queda documentado en el README. La salida sería extraerlo a
   un servicio propio o tomar un lock en base.
 
-- [ ] **I8 — `JWT_EXPIRES_IN` se ignora**
-  `backend/src/controllers/authController.js:31` y `:53`
-  El `.env` define `JWT_EXPIRES_IN=7d`, pero el código codifica `{ expiresIn: '30d' }`.
-  La variable de entorno no tiene ningún efecto: la configuración miente. 30 días es
-  mucho para un token sin revocación posible (no hay lista negra). → *Bloque A*
+- [x] **I8 — `JWT_EXPIRES_IN` se ignora** ✅ *Bloque A*
+  `backend/src/controllers/authController.js`
+  El `.env` definía `JWT_EXPIRES_IN=7d`, pero el código codificaba `{ expiresIn: '30d' }`
+  en dos sitios. La variable de entorno no tenía ningún efecto: la configuración mentía.
+  *Corregido:* helper `firmarToken()` como único punto donde se decide la vigencia, que
+  lee `process.env.JWT_EXPIRES_IN` con `'7d'` por defecto.
+  *Verificado:* decodificando el token, `exp - iat` = 7 días (antes 30).
 
 ---
 
 ## 🟡 Menores
 
-- [ ] **M1 — `console.log` de depuración en producción**
-  `backend/src/controllers/appointmentController.js:71-79` — cinco `console.log` que se
-  ejecutan en cada consulta de slots, saltándose winston e imprimiendo las citas.
-  → *Bloque A*
+- [x] **M1 — `console.log` de depuración en producción** ✅ *Bloque A*
+  `backend/src/controllers/appointmentController.js` — cinco `console.log` que se
+  ejecutaban en cada consulta de slots, saltándose winston e imprimiendo las citas.
+  *Corregido:* eliminados. *Verificado:* 0 líneas de depuración tras consultar slots.
 
 - [x] **M2 — El health check no cuelga de `/api`** ✅ *Fase 2 (documentación)*
   Está en `/health` (`server.js:34`), pero `DEPLOY.md` y el README afirmaban que
@@ -161,13 +196,21 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   También citaba `node-otp / speakeasy` como dependencia de 2FA, que no está en
   `package.json` ni se usa (el 2FA es por correo). Reescrito en la Fase 2.
 
-- [ ] **M4 — Sin tope en la paginación**
-  `getAppointments` (`:175`), `getClients` (`settingsController.js:43`) y
-  `getClientsReport` (`reportController.js:61`) aceptan `?limit=999999`. → *Bloque A*
+- [x] **M4 — Sin tope en la paginación** ✅ *Bloque A*
+  `getAppointments`, `getClients`, `getClientsReport` y también `getAppointmentsReport`
+  (el cuarto no estaba en el informe original pero tenía el mismo patrón) aceptaban
+  `?limit=999999`.
+  *Corregido:* helper `utils/pagination.js` con tope de 100 y valor por defecto de 20;
+  todo lo que no sea un entero válido cae en el defecto, así que `?limit=abc` o
+  `?page=-3` ya no producen `NaN` ni offsets negativos.
+  *Verificado* con 150 clientes reales: `?limit=999999` devuelve 100 filas, `?limit=5`
+  devuelve 5, `?limit=abc` → 20, `?limit=-3` → 1.
 
-- [ ] **M5 — `sendWelcomeEmail` se importa y nunca se llama**
-  `backend/src/controllers/authController.js:5` — el correo de bienvenida no se envía
-  jamás. Decidir: usarlo tras verificar el registro, o borrarlo. → *Bloque A*
+- [x] **M5 — `sendWelcomeEmail` se importa y nunca se llama** ✅ *Bloque A*
+  `backend/src/controllers/authController.js` — el correo de bienvenida no se enviaba jamás.
+  *Decisión: usarlo.* Ya estaba escrito y con plantilla, y mejora la experiencia de alta.
+  Se llama tras crear la cuenta en `verifyRegister`, sin `await`: la función captura sus
+  propios errores, así que un fallo de SMTP no impide que la cuenta quede creada.
 
 - [ ] **M6 — El código 2FA se guarda en claro**
   `users.two_fa_code` — quien lea la base puede iniciar sesión como cualquiera durante la
@@ -178,14 +221,28 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
   `bcrypt.compare` no llega a ejecutarse y la respuesta vuelve notablemente más rápido.
   El mensaje de error sí es genérico, que está bien.
 
-- [ ] **M8 — Falta índice compuesto**
-  `appointments(appointment_date, start_time)` — la consulta de cupos (`:132`) filtra por
-  ambas columnas y solo hay índice sobre `appointment_date`. → *Bloque A*
+- [x] **M8 — Falta índice compuesto** ✅ *Bloque A*
+  `appointments(appointment_date, start_time)` — la consulta de cupos filtra por ambas
+  columnas y solo había índice sobre `appointment_date`.
+  *Corregido:* `idx_appointments_date_time` añadido a `database.sql`.
+  *Verificado:* `SHOW INDEX` lo lista con `seq 1 = appointment_date`, `seq 2 = start_time`.
+  ⚠️ **Para una instalación que ya tiene datos**, `database.sql` no se vuelve a ejecutar
+  (solo corre con el volumen vacío). Hay que aplicarlo a mano, sin perder nada:
+  ```bash
+  docker compose exec db mysql -u root -p motowash_db \
+    -e "CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);"
+  ```
+  Es una operación online en MySQL 8 (`ALGORITHM=INPLACE` por defecto al añadir un índice
+  secundario): no bloquea escrituras ni obliga a parar la aplicación. Si el índice ya
+  existe, MySQL responde error 1061 y no ocurre nada más.
 
-- [ ] **M9 — Query param `date` sin validar**
-  `backend/src/controllers/appointmentController.js:43` — `new Date(date + 'T00:00:00')`
-  a partir de un parámetro sin validar; con `?date=basura` produce `Invalid Date` y
-  `getDay()` devuelve `NaN`, que acaba en una consulta SQL. → *Bloque A*
+- [x] **M9 — Query param `date` sin validar** ✅ *Bloque A*
+  `backend/src/controllers/appointmentController.js` — `new Date(date + 'T00:00:00')` a
+  partir de un parámetro sin validar; con `?date=basura` producía `Invalid Date` y
+  `getDay()` devolvía `NaN`, que acababa en una consulta SQL.
+  *Corregido:* se exige el formato `AAAA-MM-DD` y se comprueba que la fecha resultante sea
+  válida; si no, 400.
+  *Verificado:* `basura`, `2026-13-99` y vacío devuelven 400; una fecha válida, 200.
 
 ---
 
@@ -193,15 +250,18 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 | | Total | Corregidos | Pendientes |
 |---|---|---|---|
-| 🔴 Críticos | 6 | 0 | 6 |
-| 🟠 Importantes | 8 | 2 | 6 |
-| 🟡 Menores | 9 | 2 | 7 |
-| **Total** | **23** | **4** | **19** |
+| 🔴 Críticos | 7 | 3 | 4 |
+| 🟠 Importantes | 8 | 6 | 2 |
+| 🟡 Menores | 9 | 7 | 2 |
+| **Total** | **24** | **16** | **8** |
 
-*(1 de los pendientes, I7, es decisión consciente de no corregir.)*
+Pendientes reales: **C1, C3, C5, M6** (Bloques B y C) y **I6** (Bloque B).
+Los otros tres —I7, M7 y las partes (b)/(c) de I5— son decisiones conscientes de no
+corregir, documentadas en su entrada.
 
 ### Plan de la Fase 3
 
-- **Bloque A** — internas, sin tocar el contrato de la API: C6, C4, I2, I3, I5a, I8, M1, M4, M8, M9, M5
-- **Bloque B** — integridad de datos: C5, I6
-- **Bloque C** — requieren coordinar con el frontend: C3, C1, M6
+- ✅ **Bloque A** — internas, sin tocar el contrato de la API: C4, C6, C7, I2, I3, I5a,
+  I8, M1, M4, M5, M8, M9
+- ⬜ **Bloque B** — integridad de datos: C5, I6
+- ⬜ **Bloque C** — requieren coordinar con el frontend: C3, C1, M6

@@ -1,5 +1,6 @@
 import { query, queryOne } from '../config/db.js'
 import { sendAppointmentConfirmation, sendAppointmentCancellation } from '../services/emailService.js'
+import { parsePaginacion, sqlLimitOffset } from '../utils/pagination.js'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -40,7 +41,15 @@ export const getAvailableSlots = async (req, res, next) => {
     const { date, service_id } = req.query
     if (!date || !service_id) return res.status(400).json({ message: 'Fecha y servicio requeridos' })
 
+    // Sin este chequeo, un `date` con basura produce un Invalid Date y
+    // getDay() devuelve NaN, que acababa entrando en la consulta SQL.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Fecha con formato inválido. Se espera AAAA-MM-DD.' })
+    }
     const dateObj = new Date(date + 'T00:00:00')
+    if (isNaN(dateObj.getTime())) {
+      return res.status(400).json({ message: 'Fecha inválida' })
+    }
     const dayOfWeek = dateObj.getDay()
 
     const schedule = await queryOne('SELECT * FROM schedule_config WHERE day_of_week=?', [dayOfWeek])
@@ -67,16 +76,8 @@ export const getAvailableSlots = async (req, res, next) => {
       [date]
     )
     
-    // Logs de depuración para la consola
-    console.log("----------------------------------------");
-    console.log("Fecha consultada por el cliente:", date);
-    console.log("Citas encontradas en la Base de Datos:", existingAppts);
-    
     const takenTimes = {}
     existingAppts.forEach(a => { takenTimes[a.start_time] = a.cnt })
-    console.log("Horarios ocupados con conteo:", takenTimes);
-    console.log("Límite de citas por horario (maxPerSlot):", maxPerSlot);
-    console.log("----------------------------------------");
 
     const slots = []
     const now = new Date()
@@ -134,10 +135,11 @@ export const createAppointment = async (req, res, next) => {
     )
     if (taken.cnt >= maxPerSlot) return res.status(409).json({ message: 'Horario no disponible' })
 
-    // Calcular precio con promoción activa
+    // Calcular precio con promoción activa. Se usa NOW() de MySQL en vez de
+    // pasar un Date de JS, para que la comparacion se haga en la misma zona en
+    // la que estan guardadas las ventanas de promocion (hora de pared local).
     const promo = await queryOne(
-      'SELECT * FROM promotions WHERE is_active=TRUE AND ? BETWEEN starts_at AND ends_at LIMIT 1',
-      [new Date()]
+      'SELECT * FROM promotions WHERE is_active=TRUE AND NOW() BETWEEN starts_at AND ends_at LIMIT 1'
     )
     let finalPrice = service.price
     let discountApplied = 0
@@ -172,8 +174,8 @@ export const createAppointment = async (req, res, next) => {
 export const getAppointments = async (req, res, next) => {
   try {
     const isAdmin = req.user.role === 'admin'
-    const { status, date, page = 1, limit = 20 } = req.query
-    const offset = (page - 1) * limit
+    const { status, date } = req.query
+    const paginacion = parsePaginacion(req.query)
 
     let sql = `SELECT a.*, u.name as client_name, u.email as client_email, u.phone as client_phone,
                s.name as service_name FROM appointments a
@@ -189,8 +191,7 @@ export const getAppointments = async (req, res, next) => {
     if (status) { sql += ' AND a.status=?'; params.push(status) }
     if (date) { sql += ' AND a.appointment_date=?'; params.push(date) }
 
-    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC, a.id DESC LIMIT ? OFFSET ?'
-    params.push(parseInt(limit), parseInt(offset))
+    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC, a.id DESC' + sqlLimitOffset(paginacion)
 
     const appointments = await query(sql, params)
     res.json({ appointments })

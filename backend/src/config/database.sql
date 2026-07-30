@@ -115,6 +115,24 @@ CREATE INDEX idx_appointments_client ON appointments(client_id);
 CREATE INDEX idx_appointments_status ON appointments(status);
 CREATE INDEX idx_promotions_dates ON promotions(starts_at, ends_at);
 
+-- Indice compuesto para la consulta de cupos, que filtra por fecha Y hora
+-- (appointmentController: comprobacion de disponibilidad al agendar y al
+-- reagendar). Con solo idx_appointments_date, MySQL filtraba por dia y luego
+-- recorria todas las citas de ese dia para comparar la hora.
+--
+-- OJO: este archivo solo se ejecuta en el PRIMER arranque, con el volumen
+-- vacio. Para aplicarlo sobre una instalacion que ya tiene datos, sin
+-- perderlos:
+--
+--   docker compose exec db mysql -u root -p motowash_db \
+--     -e "CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);"
+--
+-- Es una operacion online en MySQL 8 (ALGORITHM=INPLACE por defecto para
+-- anadir un indice secundario): no bloquea escrituras ni requiere parar la
+-- aplicacion. Si el indice ya existe, MySQL responde con error 1061 y no pasa
+-- nada mas.
+CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);
+
 -- ============================================
 -- DATOS INICIALES
 -- ============================================

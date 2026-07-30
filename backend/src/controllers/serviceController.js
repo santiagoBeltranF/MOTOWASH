@@ -8,14 +8,17 @@ export const getServices = async (req, res, next) => {
       : 'SELECT * FROM services WHERE is_active=TRUE ORDER BY name'
     const services = await query(sql)
 
-    // Hora actual del servidor Node.js para evitar desfases de zona horaria
-    const serverTime = new Date()
-
+    // Se compara con NOW() de MySQL, igual que en /promotions/active. Antes se
+    // pasaba un objeto Date de JS como parametro, que mysql2 serializaba segun
+    // el `timezone` del pool: con la configuracion anterior ('+00:00') salia en
+    // UTC y quedaba 5 horas corrido respecto a las ventanas de promocion, que
+    // se guardan en hora de pared local. El resultado era que este endpoint y
+    // /promotions/active discrepaban sobre la misma promocion.
     const promo = await queryOne(
-      'SELECT * FROM promotions WHERE is_active=TRUE AND ? BETWEEN starts_at AND ends_at LIMIT 1',
-      [serverTime]
+      'SELECT * FROM promotions WHERE is_active=TRUE AND NOW() BETWEEN starts_at AND ends_at LIMIT 1'
     )
-    
+
+
     if (promo) {
       // 1. Normalizar el texto de applies_to para evitar problemas de mayúsculas o espacios
       const isAllServices = String(promo.applies_to).toLowerCase().trim() === 'all'

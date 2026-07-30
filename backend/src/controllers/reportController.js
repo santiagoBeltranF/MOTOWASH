@@ -1,4 +1,5 @@
 import { query, queryOne } from '../config/db.js'
+import { parsePaginacion, sqlLimitOffset } from '../utils/pagination.js'
 
 export const getDashboardStats = async (req, res, next) => {
   try {
@@ -58,8 +59,9 @@ export const getRevenueReport = async (req, res, next) => {
 
 export const getClientsReport = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search } = req.query
-    const offset = (page - 1) * limit
+    const { search } = req.query
+    const paginacion = parsePaginacion(req.query)
+    const { page, limit } = paginacion
 
     let sql = `SELECT u.id, u.name, u.email, u.phone, u.created_at,
                COUNT(a.id) as total_appointments,
@@ -71,8 +73,7 @@ export const getClientsReport = async (req, res, next) => {
                WHERE u.role='client' AND u.is_active=TRUE`
     const params = []
     if (search) { sql += ' AND (u.name LIKE ? OR u.email LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
-    sql += ' GROUP BY u.id ORDER BY u.created_at DESC LIMIT ? OFFSET ?'
-    params.push(parseInt(limit), parseInt(offset))
+    sql += ' GROUP BY u.id ORDER BY u.created_at DESC' + sqlLimitOffset(paginacion)
 
     const [clients, total] = await Promise.all([
       query(sql, params),
@@ -80,14 +81,14 @@ export const getClientsReport = async (req, res, next) => {
         search ? [`%${search}%`, `%${search}%`] : [])
     ])
 
-    res.json({ clients, total: total.total, page: parseInt(page), limit: parseInt(limit) })
+    res.json({ clients, total: total.total, page, limit })
   } catch (err) { next(err) }
 }
 
 export const getAppointmentsReport = async (req, res, next) => {
   try {
-    const { from, to, status, service_id, page = 1, limit = 20 } = req.query
-    const offset = (page - 1) * limit
+    const { from, to, status, service_id } = req.query
+    const paginacion = parsePaginacion(req.query)
 
     let sql = `SELECT a.id, u.name as client, u.email, s.name as service,
                a.appointment_date, a.start_time, a.end_time, a.status,
@@ -98,8 +99,7 @@ export const getAppointmentsReport = async (req, res, next) => {
     if (to) { sql += ' AND a.appointment_date <= ?'; params.push(to) }
     if (status) { sql += ' AND a.status = ?'; params.push(status) }
     if (service_id) { sql += ' AND a.service_id = ?'; params.push(service_id) }
-    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC LIMIT ? OFFSET ?'
-    params.push(parseInt(limit), parseInt(offset))
+    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC' + sqlLimitOffset(paginacion)
 
     const appointments = await query(sql, params)
     res.json({ appointments })

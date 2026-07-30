@@ -14,13 +14,11 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
-# winston sigue escribiendo a logs/*.log dentro del contenedor (hallazgo I3 de
-# la auditoria, pendiente de corregir). Mientras siga asi, el directorio tiene
-# que existir y pertenecer al usuario no-root, o el File transport aborta con
-# EACCES en el arranque.
-RUN mkdir -p logs && chown -R node:node /app
-
 # Usuario no-root: la imagen base ya define `node` (uid 1000).
+#
+# Ya no hace falta crear logs/ ni cambiarle el dueno: winston solo activa los
+# transports de archivo cuando NODE_ENV != production (hallazgo I3, corregido).
+# En contenedor los logs salen por stdout y los recoge el runtime.
 USER node
 
 EXPOSE 3000

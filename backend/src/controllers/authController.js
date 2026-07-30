@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { query, queryOne } from '../config/db.js'
 import { send2FACode, sendWelcomeEmail } from '../services/emailService.js'
@@ -7,7 +8,26 @@ import logger from '../utils/logger.js'
 
 const tempTokens = new Map()
 
-const generate2FACode = () => Math.floor(100000 + Math.random() * 900000).toString()
+// Numero de codigos errados que se toleran antes de invalidar el codigo y
+// obligar a pedir uno nuevo. Sin esto, un codigo de 6 digitos con ventana de
+// 10 minutos es fuerza bruta viable: quien ataca ya tiene el tempToken porque
+// el mismo inicio el flujo.
+const MAX_INTENTOS_CODIGO = 5
+
+// crypto.randomInt usa el generador del sistema. Math.random() no sirve aqui:
+// V8 lo implementa con xorshift128+, que no es criptografico — observando
+// salidas sucesivas se puede reconstruir el estado interno y predecir los
+// codigos siguientes. El limite superior es exclusivo, asi que el rango real
+// es 100000-999999.
+const generate2FACode = () => String(crypto.randomInt(100000, 1000000))
+
+// Un unico sitio donde se decide la vigencia del token. Antes estaba escrita a
+// mano como '30d' en dos lugares, ignorando JWT_EXPIRES_IN del entorno.
+const firmarToken = (user) => jwt.sign(
+  { id: user.id, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+)
 
 export const login = async (req, res, next) => {
   try {
@@ -21,14 +41,13 @@ export const login = async (req, res, next) => {
       const expires = new Date(Date.now() + 10 * 60 * 1000)
       await query('UPDATE users SET two_fa_code=?, two_fa_expires=? WHERE id=?', [code, expires, user.id])
       const tempToken = uuidv4()
-      tempTokens.set(tempToken, { userId: user.id, expires: Date.now() + 15 * 60 * 1000 })
+      tempTokens.set(tempToken, { userId: user.id, expires: Date.now() + 15 * 60 * 1000, intentos: 0 })
       await send2FACode(user.email, user.name, code)
       logger.info(`2FA code sent to ${user.email}`)
       return res.json({ requires2FA: true, tempToken, message: 'Código enviado a tu correo' })
     }
-    
-    // Firma de token con expiración de 30 días para mantener la sesión abierta
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' })
+
+    const token = firmarToken(user)
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
   } catch (err) { next(err) }
 }
@@ -45,12 +64,23 @@ export const verify2FA = async (req, res, next) => {
       'SELECT * FROM users WHERE id=? AND two_fa_code=? AND two_fa_expires > NOW()',
       [temp.userId, code]
     )
-    if (!user) return res.status(401).json({ message: 'Código incorrecto o expirado' })
+    if (!user) {
+      temp.intentos += 1
+      // Agotados los intentos se invalida el codigo en la base y se descarta el
+      // tempToken: hay que volver a iniciar sesion para recibir uno nuevo.
+      if (temp.intentos >= MAX_INTENTOS_CODIGO) {
+        tempTokens.delete(tempToken)
+        await query('UPDATE users SET two_fa_code=NULL, two_fa_expires=NULL WHERE id=?', [temp.userId])
+        logger.warn(`2FA bloqueado por intentos fallidos (usuario ${temp.userId})`)
+        return res.status(401).json({ message: 'Demasiados intentos fallidos. Inicia sesión de nuevo para recibir un código nuevo.' })
+      }
+      const restantes = MAX_INTENTOS_CODIGO - temp.intentos
+      return res.status(401).json({ message: `Código incorrecto o expirado. Te ${restantes === 1 ? 'queda 1 intento' : `quedan ${restantes} intentos`}.` })
+    }
     await query('UPDATE users SET two_fa_code=NULL, two_fa_expires=NULL WHERE id=?', [user.id])
     tempTokens.delete(tempToken)
-    
-    // Firma de token con expiración de 30 días para mantener la sesión abierta tras el 2FA
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' })
+
+    const token = firmarToken(user)
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
   } catch (err) { next(err) }
 }
@@ -71,7 +101,7 @@ export const register = async (req, res, next) => {
 
     // Guardar temporalmente
     const hashed = await bcrypt.hash(password, 12)
-    pendingRegistrations.set(tempToken, { name, email, password: hashed, phone, code, expires })
+    pendingRegistrations.set(tempToken, { name, email, password: hashed, phone, code, expires, intentos: 0 })
 
     // Enviar código al correo
     await send2FACode(email, name, code)
@@ -91,7 +121,16 @@ export const verifyRegister = async (req, res, next) => {
     }
 
     if (pending.code !== code) {
-      return res.status(401).json({ message: 'Código incorrecto' })
+      pending.intentos += 1
+      // Igual que en el 2FA de login: agotados los intentos se descarta el
+      // registro pendiente y hay que empezar de nuevo.
+      if (pending.intentos >= MAX_INTENTOS_CODIGO) {
+        pendingRegistrations.delete(tempToken)
+        logger.warn(`Registro bloqueado por intentos fallidos (${pending.email})`)
+        return res.status(401).json({ message: 'Demasiados intentos fallidos. Regístrate de nuevo para recibir un código nuevo.' })
+      }
+      const restantes = MAX_INTENTOS_CODIGO - pending.intentos
+      return res.status(401).json({ message: `Código incorrecto. Te ${restantes === 1 ? 'queda 1 intento' : `quedan ${restantes} intentos`}.` })
     }
 
     // Crear usuario en la base de datos
@@ -101,9 +140,38 @@ export const verifyRegister = async (req, res, next) => {
     )
 
     pendingRegistrations.delete(tempToken)
+
+    // El correo de bienvenida se envia sin bloquear la respuesta: la funcion
+    // captura sus propios errores, asi que un fallo de SMTP no impide que la
+    // cuenta quede creada.
+    sendWelcomeEmail(pending.email, pending.name)
+
     res.status(201).json({ message: '¡Cuenta creada exitosamente! Ya puedes iniciar sesión.' })
   } catch (err) { next(err) }
 }
+
+// Los Map de arriba solo se limpian en el camino feliz, asi que cada login
+// abandonado o registro sin verificar deja una entrada muerta y la memoria
+// crece sin limite. Este barrido las descarta cada 5 minutos.
+//
+// NOTA: esto resuelve la fuga, no el problema de fondo. El estado sigue
+// viviendo en la memoria del proceso: se pierde al reiniciar el contenedor y,
+// con mas de una replica del backend, la peticion de verificacion puede llegar
+// a un proceso que no tiene el token. Ver hallazgo I5 en AUDITORIA.md.
+const purgarExpirados = () => {
+  const ahora = Date.now()
+  let purgados = 0
+  for (const [clave, valor] of tempTokens) {
+    if (valor.expires < ahora) { tempTokens.delete(clave); purgados++ }
+  }
+  for (const [clave, valor] of pendingRegistrations) {
+    if (valor.expires < ahora) { pendingRegistrations.delete(clave); purgados++ }
+  }
+  if (purgados > 0) logger.debug(`Purgadas ${purgados} entrada(s) expirada(s) de autenticacion`)
+}
+
+// unref() para que este temporizador no mantenga vivo el proceso al apagarse.
+setInterval(purgarExpirados, 5 * 60 * 1000).unref()
 
 export const getMe = async (req, res) => {
   res.json({ user: req.user })
