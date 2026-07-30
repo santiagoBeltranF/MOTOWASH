@@ -1,0 +1,107 @@
+name: motowash
+
+services:
+  # ===========================================================================
+  # Base de datos
+  # ===========================================================================
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?falta MYSQL_ROOT_PASSWORD en el .env de la raiz}
+      # Tiene que coincidir con el `CREATE DATABASE` / `USE` de database.sql.
+      # El entrypoint crea esta base primero y luego ejecuta el script, cuyo
+      # CREATE DATABASE IF NOT EXISTS queda como no-op. Si los nombres no
+      # coinciden, el script crea una SEGUNDA base sobre la que MYSQL_USER no
+      # tiene permisos, y el backend arranca contra una base vacia.
+      MYSQL_DATABASE: ${DB_NAME:-motowash_db}
+      MYSQL_USER: ${DB_USER:-motowash}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en el .env de la raiz}
+      TZ: ${TZ:-America/Bogota}
+    volumes:
+      - db_data:/var/lib/mysql
+      # Los scripts de este directorio SOLO corren en el primer arranque, con
+      # el volumen vacio. Si cambias el esquema despues, hay que recrear el
+      # volumen:  docker compose down -v && docker compose up --build
+      - ./backend/src/config/database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      # 3307 en el host para no chocar con un MySQL instalado localmente.
+      - "${DB_PORT_HOST:-3307}:3306"
+    healthcheck:
+      # CMD-SHELL (no CMD) porque hace falta que el shell expanda la variable
+      # dentro del contenedor. Con la forma exec, $MYSQL_ROOT_PASSWORD se
+      # pasaria como cadena literal.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ===========================================================================
+  # API
+  # ===========================================================================
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      TZ: ${TZ:-America/Bogota}
+
+      # DB_HOST es el nombre del servicio, resuelto por el DNS interno de
+      # Compose. El puerto es el interno (3306), no el publicado en el host.
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-motowash_db}
+      DB_USER: ${DB_USER:-motowash}
+      DB_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en el .env de la raiz}
+
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en el .env de la raiz}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASS: ${MAIL_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-MotoWash <no-reply@motowash.local>}
+
+      # URL publica REAL desde la que el navegador carga el frontend. Es lo que
+      # el backend usa como origen permitido por CORS, asi que va la URL que se
+      # escribe en la barra de direcciones — nunca el nombre del servicio de
+      # Compose (`http://frontend`), que solo existe dentro de la red interna.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+
+      # Saltos de proxy reales entre el cliente y Express. Aqui solo hay nginx,
+      # asi que es 1. No se usa `true`: eso haria confiar en toda la cadena de
+      # X-Forwarded-For, y cualquiera podria falsear su IP inyectando la
+      # cabecera para saltarse el rate limit del login.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+    ports:
+      # Publicado solo para depurar contra el API directamente. El trafico real
+      # del navegador entra por nginx (puerto 8080).
+      - "${BACKEND_PORT_HOST:-3000}:3000"
+
+  # ===========================================================================
+  # Frontend (build con Vite + nginx sirviendo el estatico)
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Build arg, no variable de runtime: Vite lo incrusta en el bundle.
+        # Ver el comentario en frontend/Dockerfile.
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "${FRONTEND_PORT_HOST:-8080}:80"
+
+volumes:
+  db_data:
