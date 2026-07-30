@@ -119,9 +119,22 @@ CREATE INDEX idx_promotions_dates ON promotions(starts_at, ends_at);
 -- DATOS INICIALES
 -- ============================================
 
--- Admin por defecto (password: Admin123!)
-INSERT INTO users (name, email, password, role, is_active, email_verified) VALUES
-('Administrador', 'admin@motowash.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LedYkAuM7G1z0m0Wy', 'admin', TRUE, TRUE);
+-- Admin por defecto — usuario: admin@motowash.com  /  password: Admin123!
+--
+-- El hash anterior era un valor de ejemplo copiado de un tutorial y NO
+-- correspondia a ninguna contrasena conocida, asi que el admin no podia
+-- iniciar sesion en una instalacion limpia. Este si es un hash real de
+-- 'Admin123!' (bcrypt, 12 rondas), verificado con bcrypt.compare.
+--
+-- two_fa_enabled=FALSE solo para este usuario semilla, para poder entrar sin
+-- depender de que MAIL_* este configurado. Los clientes que se registran
+-- siguen con 2FA activo por el DEFAULT de la tabla.
+--
+-- ADVERTENCIA: esta contrasena es publica (esta en este archivo, en el repo).
+-- Sirve para desarrollo. Cambiala en el primer login y activa el 2FA antes de
+-- exponer la aplicacion a internet. Ver README.md.
+INSERT INTO users (name, email, password, role, is_active, email_verified, two_fa_enabled) VALUES
+('Administrador', 'admin@motowash.com', '$2a$12$XQMCX4jG5Rj/.HX5g.Tfo.msZ4UUAta/LISMtKNupGMcjjcM8/.kO', 'admin', TRUE, TRUE, FALSE);
 
 -- Servicios por defecto
 INSERT INTO services (name, description, price, duration_minutes) VALUES

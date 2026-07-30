@@ -14,6 +14,18 @@ import logger from './utils/logger.js'
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Detras de un proxy inverso (nginx), la IP real del cliente llega en la
+// cabecera X-Forwarded-For. Sin esto, express-rate-limit ve la IP de nginx en
+// todas las peticiones y el limite de 5 intentos de login pasa a aplicarse
+// globalmente a todos los usuarios juntos: un solo atacante deja fuera al
+// negocio entero.
+//
+// Se declara el numero de saltos reales (1 = solo nginx), no `true`. Con
+// `true` Express confiaria en toda la cadena de X-Forwarded-For, y cualquiera
+// podria falsear su IP inyectando la cabecera para saltarse el limite.
+// Por defecto 0, que es lo correcto al correr sin proxy delante.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 0))
+
 // Security middleware
 app.use(helmet())
 app.use(cors({
@@ -56,7 +68,12 @@ cron.schedule('*/5 * * * *', async () => {
 
 // Start server
 const start = async () => {
-  await testConnection()
+  try {
+    await testConnection()
+  } catch (err) {
+    logger.error('Arranque abortado: no hay conexion con MySQL', { err: err.message })
+    process.exit(1)
+  }
   app.listen(PORT, () => {
     logger.info(`🚀 MotoWash API running on port ${PORT}`)
     logger.info(`📋 Environment: ${process.env.NODE_ENV}`)
