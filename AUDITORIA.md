@@ -660,8 +660,10 @@ desincronizarse, una clave ajena no.
 
 `String(fecha).slice(0, 10)` sobre una columna `DATE` da **«Thu Jul 30»**, no
 «2026-07-30», porque mysql2 devuelve las fechas como objetos `Date`. La comparación de
-turno vencido nunca era cierta. Apareció el mismo error **dos veces**: en el backend y en
-la aserción de la propia prueba. Corregido con un normalizador `aISO()`.
+turno vencido nunca era cierta. Corregido con un normalizador `aISO()`.
+
+Lo que importa de este bug no es el bug: es que **el mismo error estaba en el código y en
+la aserción de la prueba**. Ver «La prueba que comparte el error con el código», más abajo.
 
 ### Coste de la suite
 
@@ -675,7 +677,75 @@ pasada completa se hace una vez al cerrar cada bloque (~5 min).
 
 ### Pendiente de la Fase 5
 
-Bloques 3 a 5: recibo impreso a 80 mm, reporte contable y dashboard.
+**Bloque 3 — Recibo impreso. Encargado, sin empezar.**
+
+- Recibo en HTML con CSS a 80 mm, imprimible desde el navegador contra la térmica
+  instalada en el sistema. Sin drivers ni ESC/POS.
+- Contenido: datos del negocio, consecutivo, fecha, cliente, placa, servicio, desglose del
+  pago, descuento con su motivo si lo hubo, y quién cobró.
+- **Pantalla propia de historial de recibos**, con búsqueda por consecutivo, placa,
+  cliente y rango de fechas. Desde ahí se reimprime y se anula. Los anulados **se ven,
+  marcados como tales**: nunca desaparecen de la lista.
+- **Añadir a configuración: NIT, razón social y régimen tributario**, los tres opcionales.
+  Van al encabezado del recibo si están rellenos; si no, el recibo sale igual sin ellos.
+  Nada de DIAN todavía.
+
+Lo que ya está listo para engancharlo: `GET /receipts` y `GET /receipts/:id` devuelven el
+recibo con sus líneas, su desglose de pago y los `business_*` de `settings`;
+`POST /receipts/:id/void` anula y está probado.
+
+**Bloques 4 y 5:** reporte contable y dashboard.
+
+---
+
+## ⚠️ Patrones de error que ya nos han mordido
+
+Dos tropiezos propios de la Fase 5. Se dejan escritos porque **no son casos aislados: son
+formas de fallar que se repiten**, y reconocerlas cuesta menos que volver a caer.
+
+### 1. La prueba que comparte el error con el código
+
+Al comparar el día de operación de un turno, tanto el backend como la aserción de su
+prueba hacían `String(fecha).slice(0, 10)`. mysql2 devuelve las columnas `DATE` como
+objetos `Date`, así que eso produce **«Thu Jul 30»** y no «2026-07-30».
+
+El backend falló y se detectó. Pero la prueba llevaba **el mismo error dentro**: si el
+código hubiera estado bien y solo la prueba mal —o si ambos hubieran coincidido en el
+formato equivocado—, **habría pasado en verde sin comprobar nada**.
+
+> Una prueba que repite la suposición del código no la verifica: la confirma.
+
+**Cómo evitarlo.** Que la prueba compare contra algo construido de otra manera que el
+código bajo prueba. En este caso, la prueba conocía el valor esperado (`ymd(ayer)`) y
+podía comparar contra él directamente, sin volver a derivarlo con la misma expresión que
+usa el backend. Si para escribir la aserción hace falta copiar una línea del código, esa
+aserción no sirve.
+
+Aplica igual a: formatear dinero, normalizar placas, calcular el fin de una cita, derivar
+si un turno está vencido. Todo lo que tenga un *helper* compartido: si la prueba llama al
+mismo helper, solo comprueba que el helper es consistente consigo mismo.
+
+### 2. Sustituir texto que también aparece en un comentario
+
+Al actualizar `database.sql` con una sustitución de cadena, el patrón buscado aparecía
+**dos veces**: en la sentencia real y en una línea de ejemplo dentro de un comentario. La
+sustitución acertó en ambas, partió el bloque comentado y dejó el script con error de
+sintaxis. Las tablas nuevas quedaban vacías en una instalación limpia, en silencio.
+
+**Cómo evitarlo.** Después de tocar `database.sql`, ejecutarlo entero contra un MySQL
+desechable y comprobar los conteos sembrados, antes de tocar el entorno real:
+
+```bash
+docker run --rm -d --name sql-lint -e MYSQL_ROOT_PASSWORD=t mysql:8.0
+docker exec -i sql-lint mysql -uroot -pt < backend/src/config/database.sql
+```
+
+### Lo que tienen en común
+
+Los dos fallan **en silencio y en verde**. No hay excepción, no hay error visible: hay una
+comprobación que no comprueba, o un script que se corta sin avisar. Es la misma familia
+que C7 y C8 de la Fase 4 — cosas que solo aparecen al ejecutar de verdad y mirar el
+resultado, no al leer el código ni al ver la suite en verde.
 
 ---
 
