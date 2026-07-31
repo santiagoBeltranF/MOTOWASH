@@ -95,7 +95,10 @@ test.describe('Caminos de error desde la interfaz', () => {
   test('sesion expirada: token invalido echa al login', async ({ page }) => {
     await page.goto('/admin/dashboard')
     await page.evaluate(() => localStorage.setItem('mw_token', 'token.completamente.invalido'))
-    await page.goto('/admin/clients')
+    // El interceptor detecta el token invalido y hace window.location.href, lo
+    // que puede abortar esta navegacion en vuelo. Es justo lo que se espera que
+    // ocurra, asi que se tolera el aborto y se comprueba el resultado.
+    await page.goto('/admin/clients').catch(() => {})
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
   })
 

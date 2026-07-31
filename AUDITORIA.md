@@ -378,7 +378,7 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 ## 🔬 Fase 4 — hallazgos de la verificación end-to-end
 
-Los ocho salieron de recorrer la aplicación con navegadores reales
+Los nueve salieron de recorrer la aplicación con navegadores reales
 (`e2e/`, Playwright). **Ninguno aparece leyendo el código**, que es como se hicieron las
 fases 1–3. Tres de ellos (E3, E4 y E8) los había introducido yo al contenerizar en la
 Fase 2, y **E8 solo se manifestaba fuera de Chromium**: apareció al ampliar la suite a
@@ -477,6 +477,21 @@ Firefox, WebKit y perfiles móviles.
   *Verificado:* `Content-Encoding: gzip` desaparece del API y se mantiene en el bundle;
   16 repeticiones del humo en Firefox y WebKit, cero excepciones.
 
+- [ ] **E9 — El panel solo deja ver 20 registros y no hay forma de ver el resto**
+  `frontend/src/pages/admin/Appointments.jsx`, `Clients.jsx`, `Reports.jsx`
+  **Hallazgo nuevo, salió al probar con volumen.** Ninguna de las tres pantallas envía
+  `page` ni `limit`, así que reciben el valor por defecto del backend —20 filas— y
+  **no tienen ningún control de paginación**: ni «siguiente», ni «cargar más», ni número
+  de página.
+  *Comprobado* sembrando 150 citas: la pantalla de Citas aguanta sin romperse, pero pinta
+  20 y las otras 130 son sencillamente inalcanzables desde el panel. El tope de 100 de M4
+  ni siquiera llega a notarse, porque nadie pide tanto.
+  🔵 **No se corrige aquí.** Añadir paginación es trabajo de producto —controles nuevos en
+  tres pantallas, estado de página, y decidir si se pagina o se hace scroll infinito—, no
+  una corrección de la auditoría. Queda anotado con una prueba que documenta el límite
+  real de hoy (`e2e/tests/05-cobertura.spec.js`) para que el día que se implemente haya
+  con qué contrastar.
+
 ### Otros cambios de la Fase 4
 
 **Límites de tasa configurables por entorno**, con el valor de producción como defecto
@@ -537,13 +552,17 @@ sabe si funciona.
 | ~~Un solo navegador~~ | ✅ **Cerrado.** La suite corre en Chromium, Firefox y WebKit. Destapó **E8**, que en Chromium no aparecía. |
 | ~~Sin viewport móvil~~ | ✅ **Cerrado.** Perfiles `Pixel 7` e `iPhone 14`, con user agent táctil y `hasTouch`. Obligó a que las pruebas abran la barra lateral del panel con el botón de menú, que por debajo de 1024 px está oculta. |
 | **Envío real por Gmail** | Las pruebas usan un buzón desechable (mailpit). Que `MAIL_USER`/`MAIL_PASS` reales funcionen contra `smtp.gmail.com` no está comprobado desde que se revocó la App Password anterior. |
-| **Concurrencia desde la interfaz** | C5 se demostró por API con 30 rondas, no con dos navegadores reservando la misma franja a la vez. |
-| **Volumen de datos** | Las listas se probaron con pocas filas. Con cientos de citas empezaría a notarse el tope de paginación de M4, y **la interfaz no tiene controles de página**. |
-| **Acciones del admin sobre citas** | Se verificó que la pantalla de Citas lista datos, pero no cancelar una cita ni marcarla como completada desde el panel. |
+| ~~Concurrencia desde la interfaz~~ | ✅ **Cerrado.** Dos contextos de navegador reservando la misma franja a la vez con el límite en 1: exactamente una prospera, y la base lo confirma. |
+| ~~Volumen de datos~~ | ✅ **Cerrado**, y destapó **E9**: con 150 citas sembradas la pantalla aguanta, pero solo deja ver 20 y no hay controles de página. |
+| ~~Acciones del admin sobre citas~~ | ✅ **Cerrado.** Cancelar desde el panel deja la cita en `cancelled`; marcar como realizada una cita futura se rechaza y el mensaje llega a la pantalla. |
 | **Cifras de los informes** | Los dos informes cargan sin error, pero con la base casi vacía. No se ha validado que los totales, ingresos y agrupaciones sean correctos. |
 
 ### Cómo cerrar cada hueco
 
-Los dos primeros ya están cerrados. De los que quedan, la concurrencia se cubre con dos
-contextos de navegador en paralelo; los tres últimos necesitan antes un juego de datos de
-prueba con volumen, que hoy no existe.
+Quedan dos, y ninguno se cierra con más pruebas:
+
+- **Envío real por Gmail** depende de credenciales vivas que no están en el entorno de
+  pruebas. La forma de comprobarlo es un registro real contra la cuenta de producción.
+- **Cifras de los informes** exige un juego de datos representativo con importes y
+  estados variados, y decidir antes cuáles son los totales correctos. Es trabajo de
+  producto, no de infraestructura de pruebas.
