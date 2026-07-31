@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search, UserCheck, UserX, Users } from 'lucide-react'
 import api from '../../utils/api'
+import Paginacion from '../../components/Paginacion'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -9,17 +10,22 @@ export default function Clients() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState({ total: 0, totalPages: 1, limit: 20 })
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await api.get(`/clients?search=${search}`)
-      setClients(res.data.clients)
+      const res = await api.get(`/clients?search=${encodeURIComponent(search)}&page=${pagina}`)
+      setClients(res.data.clients ?? [])
+      setMeta({ total: res.data.total ?? 0, totalPages: res.data.totalPages ?? 1, limit: res.data.limit ?? 20 })
     } catch { toast.error('Error cargando clientes') }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t) }, [search])
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t) }, [search, pagina])
+  // Al buscar se vuelve a la primera pagina.
+  useEffect(() => { setPagina(1) }, [search])
 
   const toggle = async (id) => {
     try { await api.patch(`/clients/${id}/toggle`); toast.success('Estado actualizado'); load() }
@@ -93,6 +99,10 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && (
+          <Paginacion page={pagina} totalPages={meta.totalPages} total={meta.total} limit={meta.limit}
+            onChange={setPagina} etiqueta="clientes" />
         )}
       </div>
     </div>

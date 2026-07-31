@@ -1,6 +1,6 @@
 import { query, queryOne, transaction, queryWith, queryOneWith } from '../config/db.js'
 import { sendAppointmentConfirmation, sendAppointmentCancellation } from '../services/emailService.js'
-import { parsePaginacion, sqlLimitOffset } from '../utils/pagination.js'
+import { parsePaginacion, sqlLimitOffset, meta } from '../utils/pagination.js'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -263,24 +263,30 @@ export const getAppointments = async (req, res, next) => {
     const { status, date } = req.query
     const paginacion = parsePaginacion(req.query)
 
-    let sql = `SELECT a.*, u.name as client_name, u.email as client_email, u.phone as client_phone,
-               s.name as service_name FROM appointments a
+    // El FROM y el WHERE se arman una sola vez para poder reutilizarlos en el
+    // COUNT: si se duplicaran, el total y la pagina podrian dejar de coincidir.
+    let desde = ` FROM appointments a
                JOIN users u ON a.client_id=u.id JOIN services s ON a.service_id=s.id WHERE 1=1`
     const params = []
 
-    if (!isAdmin) { 
-      sql += ' AND a.client_id=?'; 
+    if (!isAdmin) {
+      desde += ' AND a.client_id=?'
       params.push(req.user.id)
       // Ocultar citas canceladas para los clientes en su lista
-      sql += " AND a.status != 'cancelled'"
+      desde += " AND a.status != 'cancelled'"
     }
-    if (status) { sql += ' AND a.status=?'; params.push(status) }
-    if (date) { sql += ' AND a.appointment_date=?'; params.push(date) }
+    if (status) { desde += ' AND a.status=?'; params.push(status) }
+    if (date) { desde += ' AND a.appointment_date=?'; params.push(date) }
 
-    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC, a.id DESC' + sqlLimitOffset(paginacion)
+    const sql = `SELECT a.*, u.name as client_name, u.email as client_email, u.phone as client_phone,
+               s.name as service_name` + desde +
+               ' ORDER BY a.appointment_date DESC, a.start_time DESC, a.id DESC' + sqlLimitOffset(paginacion)
 
-    const appointments = await query(sql, params)
-    res.json({ appointments })
+    const [appointments, total] = await Promise.all([
+      query(sql, params),
+      queryOne('SELECT COUNT(*) as n' + desde, params)
+    ])
+    res.json({ appointments, ...meta(paginacion, total.n) })
   } catch (err) { next(err) }
 }
 

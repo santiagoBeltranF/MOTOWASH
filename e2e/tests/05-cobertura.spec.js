@@ -115,7 +115,7 @@ test.describe('acciones del admin sobre una cita', () => {
 test.describe('volumen de datos', () => {
   test.use({ storageState: 'estado-admin.json' })
 
-  test('con 150 citas la pantalla no se rompe, pero solo deja ver 20', async ({ page }) => {
+  test('con 150 citas la paginacion deja llegar a todas', async ({ page }) => {
     test.setTimeout(120_000)
     const correo = correoDePrueba('volumen')
     await crearClienteDirecto(correo)
@@ -143,15 +143,70 @@ test.describe('volumen de datos', () => {
     await expect(page.locator('table')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/no hay citas para mostrar/i)).toHaveCount(0)
 
-    // Deja constancia del limite real de hoy (hallazgo E9): la pantalla no
-    // envia `page` ni `limit`, asi que recibe el valor por defecto del backend
-    // —20 filas— y no hay ningun control para ver el resto. Con 150 citas,
-    // 130 son sencillamente inalcanzables desde el panel.
-    const filas = await page.locator('tbody tr').count()
-    expect(filas, 'hoy la pantalla se queda en el valor por defecto de 20').toBe(20)
+    // 20 filas por pagina, pero ahora hay controles para llegar al resto (E9)
+    expect(await page.locator('tbody tr').count()).toBe(20)
+    await expect(page.getByText(/mostrando 1–20 de 15\d/i)).toBeVisible()
 
-    // Ni un solo control de paginacion en la pantalla
-    await expect(page.getByRole('button', { name: /siguiente|anterior|más|cargar/i })).toHaveCount(0)
+    // Ir a la pagina 2 debe traer filas distintas
+    const primeraDeLaUno = await page.locator('tbody tr').first().textContent()
+    await page.getByRole('button', { name: 'Página siguiente' }).click()
+    await expect(page.getByText(/mostrando 21–40/i)).toBeVisible({ timeout: 10_000 })
+    expect(await page.locator('tbody tr').first().textContent()).not.toBe(primeraDeLaUno)
+
+    // Saltar por numero de pagina
+    await page.getByRole('button', { name: 'Página 4', exact: true }).click()
+    await expect(page.getByText(/mostrando 61–80/i)).toBeVisible({ timeout: 10_000 })
+
+    // Y volver atras
+    await page.getByRole('button', { name: 'Página anterior' }).click()
+    await expect(page.getByText(/mostrando 41–60/i)).toBeVisible({ timeout: 10_000 })
+
+    // En la primera pagina, "anterior" tiene que estar deshabilitado
+    await page.getByRole('button', { name: 'Página 1', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Página anterior' })).toBeDisabled()
+  })
+})
+
+test.describe('paginacion en las otras dos pantallas', () => {
+  test.use({ storageState: 'estado-admin.json' })
+
+  test('Clientes y Reportes tambien paginan', async ({ page }) => {
+    test.setTimeout(120_000)
+    const bcrypt = (await import('bcryptjs')).default
+    const db = await conectar()
+    const hash = bcrypt.hashSync('Password123', 10)
+    for (let i = 0; i < 45; i++) {
+      await db.execute(
+        'INSERT INTO users (name,email,password,role,is_active,email_verified,two_fa_enabled) VALUES (?,?,?,?,?,?,?)',
+        [`Cliente Paginado ${i}`, `pag${i}-${Date.now()}@prueba.local`, hash, 'client', 1, 1, 0]
+      )
+    }
+    await db.end()
+
+    await page.goto('/admin/clients')
+    await expect(page.locator('table')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/mostrando 1–20 de/i)).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: 'Página siguiente' }).click()
+    await expect(page.getByText(/mostrando 21–40/i)).toBeVisible({ timeout: 10_000 })
+
+    // Buscar debe devolver a la pagina 1 (estabamos en la 2)
+    await page.locator('input[placeholder*="Buscar"]').fill('Cliente Paginado')
+    await expect(page.getByText(/mostrando 1–20 de 45/i)).toBeVisible({ timeout: 10_000 })
+
+    // Con pocos resultados no hay nada que paginar y el control desaparece
+    await page.locator('input[placeholder*="Buscar"]').fill('Cliente Paginado 7')
+    await page.waitForTimeout(1200)
+    await expect(page.getByRole('button', { name: 'Página siguiente' })).toHaveCount(0)
+
+    // Reportes: la pestana de Clientes esta paginada; la de Ingresos no, porque
+    // viene agregada por periodo.
+    await page.goto('/admin/reports')
+    await page.getByRole('button', { name: 'Clientes', exact: true }).click()
+    await expect(page.getByText(/mostrando 1–20 de/i)).toBeVisible({ timeout: 15_000 })
+
+    await page.getByRole('button', { name: 'Ingresos', exact: true }).click()
+    await page.waitForTimeout(1500)
+    await expect(page.getByRole('button', { name: 'Página siguiente' })).toHaveCount(0)
   })
 })
 

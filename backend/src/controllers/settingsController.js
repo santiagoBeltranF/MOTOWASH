@@ -1,5 +1,5 @@
 import { query, queryOne } from '../config/db.js'
-import { parsePaginacion, sqlLimitOffset } from '../utils/pagination.js'
+import { parsePaginacion, sqlLimitOffset, meta } from '../utils/pagination.js'
 
 export const getSchedule = async (req, res, next) => {
   try {
@@ -43,12 +43,18 @@ export const getClients = async (req, res, next) => {
   try {
     const { search } = req.query
     const paginacion = parsePaginacion(req.query)
-    let sql = "SELECT id, name, email, phone, is_active, created_at FROM users WHERE role='client'"
+    let desde = " FROM users WHERE role='client'"
     const params = []
-    if (search) { sql += ' AND (name LIKE ? OR email LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
-    sql += ' ORDER BY created_at DESC' + sqlLimitOffset(paginacion)
-    const clients = await query(sql, params)
-    res.json({ clients })
+    if (search) { desde += ' AND (name LIKE ? OR email LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
+
+    const sql = 'SELECT id, name, email, phone, is_active, created_at' + desde +
+                ' ORDER BY created_at DESC' + sqlLimitOffset(paginacion)
+
+    const [clients, total] = await Promise.all([
+      query(sql, params),
+      queryOne('SELECT COUNT(*) as n' + desde, params)
+    ])
+    res.json({ clients, ...meta(paginacion, total.n) })
   } catch (err) { next(err) }
 }
 

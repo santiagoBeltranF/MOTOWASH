@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Calendar, Search, CheckCircle, XCircle, Clock } from 'lucide-react'
 import api from '../../utils/api'
+import Paginacion from '../../components/Paginacion'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -36,6 +37,8 @@ export default function Appointments() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ status: '', date: '' })
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState({ total: 0, totalPages: 1, limit: 20 })
 
   const load = async () => {
     setLoading(true)
@@ -43,13 +46,18 @@ export default function Appointments() {
       const params = new URLSearchParams()
       if (filters.status) params.set('status', filters.status)
       if (filters.date) params.set('date', filters.date)
+      params.set('page', pagina)
       const res = await api.get(`/appointments?${params}`)
-      setAppointments(res.data.appointments)
+      setAppointments(res.data.appointments ?? [])
+      setMeta({ total: res.data.total ?? 0, totalPages: res.data.totalPages ?? 1, limit: res.data.limit ?? 20 })
     } catch { toast.error('Error cargando citas') }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [filters])
+  useEffect(() => { load() }, [filters, pagina])
+  // Cambiar de filtro devuelve a la primera pagina: quedarse en la 7 de un
+  // listado que ahora tiene 2 mostraria una tabla vacia sin explicacion.
+  useEffect(() => { setPagina(1) }, [filters.status, filters.date])
 
   // Captura el mensaje dinámico de error del servidor para mostrarlo en pantalla
   const updateStatus = async (id, status) => {
@@ -150,6 +158,10 @@ export default function Appointments() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && (
+          <Paginacion page={pagina} totalPages={meta.totalPages} total={meta.total} limit={meta.limit}
+            onChange={setPagina} etiqueta="citas" />
         )}
       </div>
     </div>

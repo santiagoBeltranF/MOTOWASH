@@ -1,5 +1,5 @@
 import { query, queryOne } from '../config/db.js'
-import { parsePaginacion, sqlLimitOffset } from '../utils/pagination.js'
+import { parsePaginacion, sqlLimitOffset, meta } from '../utils/pagination.js'
 
 export const getDashboardStats = async (req, res, next) => {
   try {
@@ -81,7 +81,9 @@ export const getClientsReport = async (req, res, next) => {
         search ? [`%${search}%`, `%${search}%`] : [])
     ])
 
-    res.json({ clients, total: total.total, page, limit })
+    // Se conservan `total`, `page` y `limit` sueltos por compatibilidad y se
+    // anade `totalPages`, que es lo que necesitan los controles de paginacion.
+    res.json({ clients, ...meta(paginacion, total.total) })
   } catch (err) { next(err) }
 }
 
@@ -90,18 +92,22 @@ export const getAppointmentsReport = async (req, res, next) => {
     const { from, to, status, service_id } = req.query
     const paginacion = parsePaginacion(req.query)
 
-    let sql = `SELECT a.id, u.name as client, u.email, s.name as service,
-               a.appointment_date, a.start_time, a.end_time, a.status,
-               a.final_price, a.discount_applied, a.notes, a.created_at
-               FROM appointments a JOIN users u ON a.client_id=u.id JOIN services s ON a.service_id=s.id WHERE 1=1`
+    let desde = ` FROM appointments a JOIN users u ON a.client_id=u.id JOIN services s ON a.service_id=s.id WHERE 1=1`
     const params = []
-    if (from) { sql += ' AND a.appointment_date >= ?'; params.push(from) }
-    if (to) { sql += ' AND a.appointment_date <= ?'; params.push(to) }
-    if (status) { sql += ' AND a.status = ?'; params.push(status) }
-    if (service_id) { sql += ' AND a.service_id = ?'; params.push(service_id) }
-    sql += ' ORDER BY a.appointment_date DESC, a.start_time DESC' + sqlLimitOffset(paginacion)
+    if (from) { desde += ' AND a.appointment_date >= ?'; params.push(from) }
+    if (to) { desde += ' AND a.appointment_date <= ?'; params.push(to) }
+    if (status) { desde += ' AND a.status = ?'; params.push(status) }
+    if (service_id) { desde += ' AND a.service_id = ?'; params.push(service_id) }
 
-    const appointments = await query(sql, params)
-    res.json({ appointments })
+    const sql = `SELECT a.id, u.name as client, u.email, s.name as service,
+               a.appointment_date, a.start_time, a.end_time, a.status,
+               a.final_price, a.discount_applied, a.notes, a.created_at` + desde +
+               ' ORDER BY a.appointment_date DESC, a.start_time DESC' + sqlLimitOffset(paginacion)
+
+    const [appointments, total] = await Promise.all([
+      query(sql, params),
+      queryOne('SELECT COUNT(*) as n' + desde, params)
+    ])
+    res.json({ appointments, ...meta(paginacion, total.n) })
   } catch (err) { next(err) }
 }

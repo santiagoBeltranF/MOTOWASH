@@ -48,7 +48,10 @@ export default function BookPage() {
   }
 
   useEffect(() => {
-    loadActivePending()
+    // Los servicios se piden una sola vez; el estado de la cita pendiente lo
+    // refresca el efecto de abajo, que corre tambien en el montaje. Tenerlo en
+    // los dos sitios disparaba dos veces la misma peticion en cada entrada.
+    //
     // Se normaliza a lista antes de guardar. axios devuelve el cuerpo sin
     // parsear —como texto— cuando no consigue interpretarlo, y en ese caso
     // `r.data.services` es undefined: sin esta guarda, el `services.map` de mas

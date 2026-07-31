@@ -477,7 +477,7 @@ Firefox, WebKit y perfiles móviles.
   *Verificado:* `Content-Encoding: gzip` desaparece del API y se mantiene en el bundle;
   16 repeticiones del humo en Firefox y WebKit, cero excepciones.
 
-- [ ] **E9 — El panel solo deja ver 20 registros y no hay forma de ver el resto**
+- [x] **E9 — El panel solo dejaba ver 20 registros** ✅
   `frontend/src/pages/admin/Appointments.jsx`, `Clients.jsx`, `Reports.jsx`
   **Hallazgo nuevo, salió al probar con volumen.** Ninguna de las tres pantallas envía
   `page` ni `limit`, así que reciben el valor por defecto del backend —20 filas— y
@@ -486,11 +486,18 @@ Firefox, WebKit y perfiles móviles.
   *Comprobado* sembrando 150 citas: la pantalla de Citas aguanta sin romperse, pero pinta
   20 y las otras 130 son sencillamente inalcanzables desde el panel. El tope de 100 de M4
   ni siquiera llega a notarse, porque nadie pide tanto.
-  🔵 **No se corrige aquí.** Añadir paginación es trabajo de producto —controles nuevos en
-  tres pantallas, estado de página, y decidir si se pagina o se hace scroll infinito—, no
-  una corrección de la auditoría. Queda anotado con una prueba que documenta el límite
-  real de hoy (`e2e/tests/05-cobertura.spec.js`) para que el día que se implemente haya
-  con qué contrastar.
+  *Corregido:* los cuatro endpoints paginados devuelven ahora `total`, `page`, `limit` y
+  `totalPages` con un envoltorio común (`utils/pagination.js`), calculando el total con el
+  mismo `FROM`/`WHERE` que la página para que no puedan desincronizarse. En el frontend,
+  un componente `Paginacion` compartido por Citas, Clientes y las dos pestañas paginadas
+  de Reportes; se oculta solo cuando hay una única página, y cambiar de filtro o de
+  búsqueda devuelve a la primera —quedarse en la página 7 de un listado que ahora tiene 2
+  mostraría una tabla vacía sin explicación—. La pestaña de Ingresos no lleva controles:
+  viene agregada por periodo, no paginada.
+  *Verificado* con 150 citas y 45 clientes sembrados: «Mostrando 1–20 de 150», saltar a la
+  página siguiente trae filas distintas, el salto por número lleva a «61–80», «anterior»
+  vuelve a «41–60» y queda deshabilitado en la primera. En Clientes, buscar devuelve a la
+  página 1 y con pocos resultados el control desaparece.
 
 ### Otros cambios de la Fase 4
 
@@ -553,7 +560,7 @@ sabe si funciona.
 | ~~Sin viewport móvil~~ | ✅ **Cerrado.** Perfiles `Pixel 7` e `iPhone 14`, con user agent táctil y `hasTouch`. Obligó a que las pruebas abran la barra lateral del panel con el botón de menú, que por debajo de 1024 px está oculta. |
 | **Envío real por Gmail** | Las pruebas usan un buzón desechable (mailpit). Que `MAIL_USER`/`MAIL_PASS` reales funcionen contra `smtp.gmail.com` no está comprobado desde que se revocó la App Password anterior. |
 | ~~Concurrencia desde la interfaz~~ | ✅ **Cerrado.** Dos contextos de navegador reservando la misma franja a la vez con el límite en 1: exactamente una prospera, y la base lo confirma. |
-| ~~Volumen de datos~~ | ✅ **Cerrado**, y destapó **E9**: con 150 citas sembradas la pantalla aguanta, pero solo deja ver 20 y no hay controles de página. |
+| ~~Volumen de datos~~ | ✅ **Cerrado**, y destapó **E9**, ya corregido: con 150 citas la paginación permite llegar a todas. |
 | ~~Acciones del admin sobre citas~~ | ✅ **Cerrado.** Cancelar desde el panel deja la cita en `cancelled`; marcar como realizada una cita futura se rechaza y el mensaje llega a la pantalla. |
 | **Cifras de los informes** | Los dos informes cargan sin error, pero con la base casi vacía. No se ha validado que los totales, ingresos y agrupaciones sean correctos. |
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BarChart3, Download, Filter, Users, Calendar, DollarSign } from 'lucide-react'
 import api from '../../utils/api'
+import Paginacion from '../../components/Paginacion'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -41,13 +42,17 @@ export default function Reports() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState([])
   const [filters, setFilters] = useState({ from: '', to: '', status: '', search: '' })
+  const [pagina, setPagina] = useState(1)
+  const [meta, setMeta] = useState({ total: 0, totalPages: 1, limit: 20 })
   const [services, setServices] = useState([])
 
   useEffect(() => {
     api.get('/services').then(r => setServices(r.data.services)).catch(() => {})
   }, [])
 
-  useEffect(() => { fetchData() }, [tab, filters])
+  useEffect(() => { fetchData() }, [tab, filters, pagina])
+  // Cambiar de pestana o de filtro vuelve a la primera pagina.
+  useEffect(() => { setPagina(1) }, [tab, filters])
 
   const fetchData = async () => {
     setLoading(true)
@@ -57,10 +62,14 @@ export default function Reports() {
       if (filters.to) params.set('to', filters.to)
       if (filters.status) params.set('status', filters.status)
       if (filters.search) params.set('search', filters.search)
+      params.set('page', pagina)
 
       const endpoints = ['/reports/revenue', '/reports/appointments', '/reports/clients']
       const res = await api.get(`${endpoints[tab]}?${params}`)
       setData(res.data.data || res.data.appointments || res.data.clients || [])
+      // La pestana de Ingresos viene agregada por periodo, no paginada: ahi no
+      // hay controles que mostrar.
+      setMeta({ total: res.data.total ?? 0, totalPages: res.data.totalPages ?? 1, limit: res.data.limit ?? 20 })
     } catch { toast.error('Error cargando reporte') }
     finally { setLoading(false) }
   }
@@ -207,6 +216,10 @@ export default function Reports() {
               </table>
             )}
           </div>
+        )}
+        {!loading && tab !== 0 && (
+          <Paginacion page={pagina} totalPages={meta.totalPages} total={meta.total} limit={meta.limit}
+            onChange={setPagina} etiqueta={tab === 1 ? 'citas' : 'clientes'} />
         )}
       </div>
     </div>

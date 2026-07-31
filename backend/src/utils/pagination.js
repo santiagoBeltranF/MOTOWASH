@@ -28,6 +28,15 @@ export const parsePaginacion = ({ page, limit } = {}) => {
 // enteros acotados (limit 1-100, offset >= 0). Nunca llega texto del usuario a
 // la consulta, asi que no hay superficie de inyeccion. Los demas parametros
 // siguen yendo por placeholders.
+// Envoltorio comun de las respuestas paginadas, para que las tres pantallas del
+// panel puedan pintar los mismos controles sin casos especiales.
+export const meta = ({ page, limit }, total) => ({
+  total,
+  page,
+  limit,
+  totalPages: Math.max(1, Math.ceil(total / limit))
+})
+
 export const sqlLimitOffset = ({ limit, offset }) => {
   if (!Number.isInteger(limit) || !Number.isInteger(offset)) {
     throw new Error('sqlLimitOffset requiere enteros producidos por parsePaginacion')
