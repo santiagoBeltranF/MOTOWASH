@@ -38,6 +38,15 @@ export default defineConfig({
   },
 
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+
+    // Movil de verdad, no una ventana estrecha: los perfiles de dispositivo
+    // traen ademas user agent tactil, escala y `hasTouch`, y eso cambia como se
+    // comportan los controles. Importa porque el menu del cliente es una barra
+    // inferior de aspecto movil que hasta ahora solo se habia visto a 1280 px.
+    { name: 'movil-android', use: { ...devices['Pixel 7'] } },
+    { name: 'movil-ios', use: { ...devices['iPhone 14'] } }
   ]
 })

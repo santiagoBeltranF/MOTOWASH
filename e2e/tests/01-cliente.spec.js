@@ -97,8 +97,14 @@ test('recorrido completo del cliente', async ({ page }) => {
 
     // El nombre de la cabecera y de la tarjeta deberia reflejar el cambio sin
     // tener que recargar: la sesion en memoria sigue teniendo el nombre viejo.
-    await expect(page.locator('header').getByText('Nombre Cambiado'),
-      'la cabecera debe mostrar el nombre nuevo sin recargar').toBeVisible({ timeout: 8000 })
+    // La tarjeta de perfil muestra el nombre en cualquier tamano de pantalla.
+    await expect(page.locator('.card').first().getByText('Nombre Cambiado'),
+      'la tarjeta debe mostrar el nombre nuevo sin recargar').toBeVisible({ timeout: 8000 })
+    // En la cabecera el nombre es `hidden sm:block`: en moviles estrechos no se
+    // pinta a proposito, asi que solo se exige a partir de 640 px.
+    if ((page.viewportSize()?.width ?? 1280) >= 640) {
+      await expect(page.locator('header').getByText('Nombre Cambiado')).toBeVisible({ timeout: 8000 })
+    }
   })
 
   await test.step('perfil: cambiar contrasena', async () => {

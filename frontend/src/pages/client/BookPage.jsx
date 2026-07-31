@@ -49,7 +49,21 @@ export default function BookPage() {
 
   useEffect(() => {
     loadActivePending()
-    api.get('/services').then(r => { setServices(r.data.services); setPromo(r.data.activePromotion) }).catch(() => toast.error('Error cargando servicios'))
+    // Se normaliza a lista antes de guardar. axios devuelve el cuerpo sin
+    // parsear —como texto— cuando no consigue interpretarlo, y en ese caso
+    // `r.data.services` es undefined: sin esta guarda, el `services.map` de mas
+    // abajo tumbaba la pantalla entera en lugar de mostrar un aviso.
+    api.get('/services')
+      .then(r => {
+        const lista = Array.isArray(r.data?.services) ? r.data.services : null
+        if (!lista) {
+          toast.error('No se pudieron cargar los servicios. Vuelve a intentarlo.')
+          return
+        }
+        setServices(lista)
+        setPromo(r.data.activePromotion ?? null)
+      })
+      .catch(() => toast.error('Error cargando servicios'))
   }, [])
 
   // Pulsar "Agendar" en el menu estando ya en esta ruta no remonta el

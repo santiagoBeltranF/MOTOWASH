@@ -378,9 +378,11 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 
 ## 🔬 Fase 4 — hallazgos de la verificación end-to-end
 
-Los siete salieron de recorrer la aplicación con un navegador real
+Los ocho salieron de recorrer la aplicación con navegadores reales
 (`e2e/`, Playwright). **Ninguno aparece leyendo el código**, que es como se hicieron las
-fases 1–3. Dos de ellos (E3 y E4) los había introducido yo al contenerizar en la Fase 2.
+fases 1–3. Tres de ellos (E3, E4 y E8) los había introducido yo al contenerizar en la
+Fase 2, y **E8 solo se manifestaba fuera de Chromium**: apareció al ampliar la suite a
+Firefox, WebKit y perfiles móviles.
 
 - [x] **E1 — Cualquier 401 recargaba la página y borraba el mensaje de error** ✅
   `frontend/src/utils/api.js`
@@ -451,6 +453,30 @@ fases 1–3. Dos de ellos (E3 y E4) los había introducido yo al contenerizar en
   *Corregido:* 29 campos asociados en los 9 formularios. Las pruebas ya pueden usar
   `getByLabel` en vez de seleccionar por posición, que era frágil.
 
+- [x] **E8 — La pantalla de Agendar reventaba en Firefox y WebKit** ✅ *(bug propio de la Fase 2)*
+  `frontend/nginx.conf`, `frontend/src/pages/client/BookPage.jsx`
+  **Hallazgo nuevo, salió al ampliar la suite a otros navegadores.** En carga completa de
+  `/client/book` saltaba, de forma intermitente,
+  `TypeError: can't access property "map", n is undefined`. En Chromium **no se
+  reproducía nunca**, y por eso las 30 pruebas anteriores lo daban por bueno.
+  *Diagnóstico:* resolviendo el sourcemap se localizó en `BookPage.jsx:239`
+  (`services.map`). Instrumentando la respuesta se vio que axios recibía el cuerpo **como
+  texto**: falla el `JSON.parse` interno, devuelve la cadena cruda en silencio, y
+  `r.data.services` queda `undefined`.
+  *Causa:* el `gzip` que añadí en la Fase 2 incluía `application/json`, así que nginx
+  comprimía también las respuestas del API que pasan de 1 KB. En la práctica **solo
+  `/api/services`** (1171 B) — todos los demás endpoints se quedan por debajo del umbral,
+  que es justo por qué solo esa pantalla fallaba. Se servía gzip + chunked, y ese cuerpo
+  fallaba al decodificarse de vez en cuando fuera de Chromium.
+  *Corregido en dos frentes:* se saca `application/json` de `gzip_types` y se añade
+  `gzip_proxied off` — el API viaja por la red interna del contenedor y sus respuestas son
+  de un par de kilobytes, comprimirlas no aportaba nada; el bundle de Vite (120 KB) sí
+  se sigue comprimiendo, que es donde importa. Y `BookPage` normaliza la respuesta a lista
+  antes de guardarla, de modo que un cuerpo inesperado muestre un aviso en vez de tumbar
+  la pantalla.
+  *Verificado:* `Content-Encoding: gzip` desaparece del API y se mantiene en el bundle;
+  16 repeticiones del humo en Firefox y WebKit, cero excepciones.
+
 ### Otros cambios de la Fase 4
 
 **Límites de tasa configurables por entorno**, con el valor de producción como defecto
@@ -508,8 +534,8 @@ sabe si funciona.
 
 | Hueco | Por qué importa |
 |---|---|
-| **Un solo navegador** | Toda la suite corre en Chromium. Sin Firefox ni WebKit. |
-| **Sin viewport móvil** | Todo se probó a 1280 px, pero el menú del cliente es una barra inferior de aspecto móvil. Es justo lo que un usuario real usaría desde el teléfono. |
+| ~~Un solo navegador~~ | ✅ **Cerrado.** La suite corre en Chromium, Firefox y WebKit. Destapó **E8**, que en Chromium no aparecía. |
+| ~~Sin viewport móvil~~ | ✅ **Cerrado.** Perfiles `Pixel 7` e `iPhone 14`, con user agent táctil y `hasTouch`. Obligó a que las pruebas abran la barra lateral del panel con el botón de menú, que por debajo de 1024 px está oculta. |
 | **Envío real por Gmail** | Las pruebas usan un buzón desechable (mailpit). Que `MAIL_USER`/`MAIL_PASS` reales funcionen contra `smtp.gmail.com` no está comprobado desde que se revocó la App Password anterior. |
 | **Concurrencia desde la interfaz** | C5 se demostró por API con 30 rondas, no con dos navegadores reservando la misma franja a la vez. |
 | **Volumen de datos** | Las listas se probaron con pocas filas. Con cientos de citas empezaría a notarse el tope de paginación de M4, y **la interfaz no tiene controles de página**. |
@@ -518,7 +544,6 @@ sabe si funciona.
 
 ### Cómo cerrar cada hueco
 
-Los cuatro primeros son ampliaciones de `e2e/`: añadir proyectos de Firefox y WebKit y un
-`devices['Pixel 7']` en `playwright.config.js` cubre los dos primeros; la concurrencia,
-dos contextos de navegador en paralelo. Los tres últimos necesitan antes un juego de datos
-de prueba con volumen, que hoy no existe.
+Los dos primeros ya están cerrados. De los que quedan, la concurrencia se cubre con dos
+contextos de navegador en paralelo; los tres últimos necesitan antes un juego de datos de
+prueba con volumen, que hoy no existe.

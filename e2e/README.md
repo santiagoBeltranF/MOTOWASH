@@ -46,8 +46,23 @@ la sesión en `estado-admin.json`. No es una optimización: `/auth/login` admite
 cada 15 minutos por IP, y todas las pruebas salen de la misma. Sin esto, a partir del
 sexto login la suite falla por el limitador y no por la aplicación.
 
+**Cinco navegadores.** Chromium, Firefox, WebKit y dos perfiles móviles (`Pixel 7`,
+`iPhone 14`). No es adorno: **E8 solo se reproducía en Firefox y WebKit**, nunca en
+Chromium, y de forma intermitente. Una pasada completa son 150 pruebas, unos 6 minutos.
+
+```bash
+npm test -- --project=chromium        # solo uno, para iterar rapido
+npm test -- --repeat-each=8           # para cazar fallos intermitentes
+```
+
 **Un solo worker.** Comparten una misma base de datos; en paralelo se pisarían las citas
 y los ajustes.
+
+**Diferencias de tamaño de pantalla.** Por debajo de 1024 px la barra lateral del panel
+está oculta y hay que abrirla con el botón de menú: para eso está `irAPantallaAdmin()`, que
+funciona igual en escritorio y en móvil. Y en el portal del cliente el nombre de la
+cabecera es `hidden sm:block`, así que por debajo de 640 px no se pinta a propósito — las
+comprobaciones que dependen de él van condicionadas al ancho.
 
 **Sin reintentos.** Aquí se buscan fallos: un reintento que pasa esconde justo la
 inestabilidad que interesa ver.

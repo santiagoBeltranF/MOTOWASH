@@ -58,7 +58,32 @@ export const elegirDiaEnCalendario = async (page, fecha) => {
   await dia.click()
 }
 
+// Por debajo de 1024 px (el breakpoint `lg` de Tailwind) la barra lateral del
+// panel esta desplazada fuera de pantalla y solo se abre con el boton de menu.
+// Ojo: Playwright considera "visible" un elemento desplazado con transform,
+// porque sigue teniendo caja, asi que no sirve preguntar por isVisible(): hay
+// que mirar el ancho del viewport.
+export const esPantallaEstrecha = (page) => (page.viewportSize()?.width ?? 1280) < 1024
+
+export const abrirMenuAdminSiHaceFalta = async (page) => {
+  if (!esPantallaEstrecha(page)) return
+  const barra = page.locator('aside')
+  const yaAbierta = await barra.evaluate(el => !el.className.includes('-translate-x-full')).catch(() => false)
+  if (yaAbierta) return
+  await page.locator('header button').first().click()
+  await expect(barra).not.toHaveClass(/-translate-x-full/, { timeout: 5000 })
+}
+
+// Navega por el panel funcionando igual en escritorio y en movil.
+export const irAPantallaAdmin = async (page, nombreEnlace) => {
+  await abrirMenuAdminSiHaceFalta(page)
+  await page.getByRole('link', { name: nombreEnlace }).click()
+}
+
 export const cerrarSesion = async (page) => {
+  // En el panel el boton vive dentro de la barra lateral; en el portal del
+  // cliente esta siempre en la cabecera.
+  if (await page.locator('aside').count()) await abrirMenuAdminSiHaceFalta(page)
   await page.getByRole('button', { name: /cerrar sesión|salir/i }).first().click()
   await expect(page).toHaveURL(/\/login/, { timeout: 10_000 })
 }

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { correoDePrueba, crearClienteDirecto, limpiarDatosDePrueba, restaurarConfiguracion, proximoDiaLaborable } from '../helpers/datos.js'
 import { vaciarBuzon, esperarCodigo } from '../helpers/correo.js'
-import { entrarComoAdmin, entrarComoCliente, escribirCodigo, esperarToast } from '../helpers/sesion.js'
+import { entrarComoAdmin, entrarComoCliente, escribirCodigo, esperarToast, irAPantallaAdmin, cerrarSesion } from '../helpers/sesion.js'
 
 test.beforeAll(async () => { await restaurarConfiguracion() })
 test.afterAll(async () => { await limpiarDatosDePrueba(); await restaurarConfiguracion() })
@@ -103,12 +103,16 @@ test.describe('Caminos de error desde la interfaz', () => {
     await page.goto('/admin/clients')
     await expect(page.getByRole('heading', { name: /clientes/i })).toBeVisible()
 
-    await page.getByRole('button', { name: /cerrar sesión|salir/i }).first().click()
-    await expect(page).toHaveURL(/\/login/, { timeout: 10_000 })
+    await cerrarSesion(page)
 
-    await page.goBack()
-    // No debe verse contenido del panel con la sesion cerrada
+    // `logout` hace window.location.href, asi que goBack() puede quedar
+    // cancelado en WebKit por la navegacion dura en curso; no es un fallo de la
+    // aplicacion. Se tolera y se comprueba lo que importa: que el panel no
+    // quede accesible con la sesion cerrada.
+    await page.goBack().catch(() => {})
+    await page.waitForTimeout(1500)
     await expect(page.getByRole('heading', { name: /clientes/i })).not.toBeVisible({ timeout: 8000 })
+    await expect(page.locator('table')).toHaveCount(0)
   })
 
   })

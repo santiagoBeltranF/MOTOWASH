@@ -129,8 +129,14 @@ test('5. cambiar el nombre lo actualiza en la cabecera sin recargar', async ({ p
   await page.getByRole('button', { name: /guardar cambios/i }).click()
   await esperarToast(page, /perfil actualizado/i)
 
-  await expect(page.locator('header').getByText('Nombre Nuevo E2E')).toBeVisible({ timeout: 8000 })
-  await expect(page.locator('.card').first().getByText('Nombre Nuevo E2E')).toBeVisible()
+  // La tarjeta de perfil muestra el nombre en cualquier tamano.
+  await expect(page.locator('.card').first().getByText('Nombre Nuevo E2E')).toBeVisible({ timeout: 8000 })
+  // En la cabecera el nombre es `hidden sm:block`, asi que en moviles estrechos
+  // no se pinta a proposito: ahi no tiene sentido exigirlo.
+  const ancho = page.viewportSize()?.width ?? 1280
+  if (ancho >= 640) {
+    await expect(page.locator('header').getByText('Nombre Nuevo E2E')).toBeVisible({ timeout: 8000 })
+  }
 })
 
 // --- Hallazgo 6: el asistente se reinicia al pulsar "Agendar" ---------------

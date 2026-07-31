@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { limpiarDatosDePrueba, restaurarConfiguracion } from '../helpers/datos.js'
-import { entrarComoAdmin, esperarToast } from '../helpers/sesion.js'
+import { entrarComoAdmin, esperarToast, irAPantallaAdmin } from '../helpers/sesion.js'
 
 test.beforeAll(async () => { await restaurarConfiguracion() })
 test.afterAll(async () => { await limpiarDatosDePrueba(); await restaurarConfiguracion() })
@@ -12,27 +12,27 @@ test.describe('Recorrido del administrador', () => {
 
   test('las cuatro pantallas que estaban muertas por C7 pintan datos', async ({ page }) => {
     // Citas
-    await page.getByRole('link', { name: 'Citas', exact: true }).click()
+    await irAPantallaAdmin(page, 'Citas')
     await expect(page.getByRole('heading', { name: /citas/i }).first()).toBeVisible()
     await expect(page.getByText(/error/i)).not.toBeVisible()
 
     // Clientes
-    await page.getByRole('link', { name: /clientes/i }).click()
+    await irAPantallaAdmin(page, /clientes/i)
     await expect(page.getByRole('heading', { name: /clientes/i })).toBeVisible()
     await expect(page.locator('table')).toBeVisible({ timeout: 10_000 })
 
     // Reportes
-    await page.getByRole('link', { name: /reportes/i }).click()
+    await irAPantallaAdmin(page, /reportes/i)
     await expect(page.getByRole('heading', { name: /reportes/i }).first()).toBeVisible()
     await expect(page.getByText(/error/i)).not.toBeVisible()
 
     // Dashboard
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await irAPantallaAdmin(page, /dashboard/i)
     await expect(page.getByText(/error/i)).not.toBeVisible()
   })
 
   test('crear y editar un servicio', async ({ page }) => {
-    await page.getByRole('link', { name: /servicios/i }).click()
+    await irAPantallaAdmin(page, /servicios/i)
     await page.getByRole('button', { name: /nuevo servicio/i }).click()
 
     // getByLabel no sirve: los <label> no estan asociados a sus <input>.
@@ -57,7 +57,7 @@ test.describe('Recorrido del administrador', () => {
   })
 
   test('crear una promocion con fecha de fin', async ({ page }) => {
-    await page.getByRole('link', { name: /promociones/i }).click()
+    await irAPantallaAdmin(page, /promociones/i)
     await page.getByRole('button', { name: /nueva promoción|nueva promocion/i }).click()
 
     const modal = page.locator('.fixed.inset-0')
@@ -77,7 +77,7 @@ test.describe('Recorrido del administrador', () => {
   })
 
   test('cambiar el horario de un dia', async ({ page }) => {
-    await page.getByRole('link', { name: /horarios/i }).click()
+    await irAPantallaAdmin(page, /horarios/i)
     await expect(page.getByRole('heading', { name: /horario/i }).first()).toBeVisible()
 
     const horas = page.locator('input[type="time"]')
@@ -93,7 +93,7 @@ test.describe('Recorrido del administrador', () => {
   })
 
   test('guardar ajustes', async ({ page }) => {
-    await page.getByRole('link', { name: /configuración|configuracion/i }).click()
+    await irAPantallaAdmin(page, /configuración|configuracion/i)
     await expect(page.getByRole('heading', { name: /configuración|configuracion/i }).first()).toBeVisible()
 
     const campo = page.locator('input').first()
