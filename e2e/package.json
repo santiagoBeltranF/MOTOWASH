@@ -1,0 +1,20 @@
+{
+  "name": "motowash-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas end-to-end de MotoWash con Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "mysql2": "^3.9.7"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  }
+}

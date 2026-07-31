@@ -1,0 +1,6 @@
+node_modules/
+resultados/
+informe/
+estado-admin.json
+test-results/
+playwright-report/

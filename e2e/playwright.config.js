@@ -1,0 +1,43 @@
+import { defineConfig, devices } from '@playwright/test'
+
+// La aplicacion se sirve por nginx en 8080, que es el mismo origen desde el que
+// el navegador pide /api. Apuntar a otro sitio (por ejemplo al backend directo
+// en 3000) no serviria: no hay frontend ahi.
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:8080'
+
+export default defineConfig({
+  testDir: './tests',
+  globalSetup: './global-setup.js',
+  outputDir: './resultados',
+
+  // Estas pruebas comparten una sola base de datos: si corren en paralelo se
+  // pisan las citas y los ajustes. Un solo worker, en orden.
+  fullyParallel: false,
+  workers: 1,
+
+  // Nada de reintentos: aqui se busca detectar fallos, y un reintento que pasa
+  // esconde precisamente la inestabilidad que interesa ver.
+  retries: 0,
+
+  timeout: 45_000,
+  expect: { timeout: 10_000 },
+
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: './informe', open: 'never' }]
+  ],
+
+  use: {
+    baseURL: BASE_URL,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    actionTimeout: 10_000,
+    locale: 'es-CO',
+    timezoneId: 'America/Bogota'
+  },
+
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
+  ]
+})

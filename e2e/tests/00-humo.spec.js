@@ -1,0 +1,73 @@
+import { test, expect } from '@playwright/test'
+import { entrarComoAdmin } from '../helpers/sesion.js'
+import { crearClienteDirecto, correoDePrueba, limpiarDatosDePrueba } from '../helpers/datos.js'
+import { entrarComoCliente } from '../helpers/sesion.js'
+
+test.afterAll(async () => { await limpiarDatosDePrueba() })
+
+// Red de arrastre: recorre las 14 pantallas y recoge errores de consola,
+// peticiones fallidas y excepciones sin capturar. Es lo que la auditoria
+// estatica no puede ver.
+const vigilar = (page, bolsa) => {
+  page.on('console', m => {
+    if (m.type() === 'error') bolsa.consola.push(m.text().slice(0, 200))
+  })
+  page.on('pageerror', e => bolsa.excepciones.push(String(e).slice(0, 200)))
+  page.on('response', r => {
+    if (r.status() >= 400) bolsa.http.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`)
+  })
+}
+
+test('las 8 pantallas del admin cargan sin errores', async ({ page }) => {
+  const bolsa = { consola: [], excepciones: [], http: [] }
+  vigilar(page, bolsa)
+  await entrarComoAdmin(page)
+
+  const pantallas = [
+    ['/admin/dashboard', /dashboard|resumen/i],
+    ['/admin/services', /servicios/i],
+    ['/admin/schedule', /horario/i],
+    ['/admin/appointments', /citas/i],
+    ['/admin/promotions', /promociones/i],
+    ['/admin/clients', /clientes/i],
+    ['/admin/reports', /reportes/i],
+    ['/admin/settings', /configuración|configuracion/i]
+  ]
+
+  for (const [ruta, titulo] of pantallas) {
+    await page.goto(ruta)
+    await expect(page.getByRole('heading', { name: titulo }).first(),
+      `la pantalla ${ruta} deberia mostrar su titulo`).toBeVisible({ timeout: 15_000 })
+    await page.waitForTimeout(700)
+  }
+
+  console.log('\n--- ADMIN ---')
+  console.log('HTTP >=400:', bolsa.http.length ? bolsa.http : 'ninguno')
+  console.log('errores de consola:', bolsa.consola.length ? bolsa.consola : 'ninguno')
+  console.log('excepciones:', bolsa.excepciones.length ? bolsa.excepciones : 'ninguna')
+
+  expect(bolsa.excepciones, 'no deberia haber excepciones sin capturar').toEqual([])
+  expect(bolsa.http, 'no deberia haber respuestas HTTP de error').toEqual([])
+})
+
+test('las 3 pantallas del cliente cargan sin errores', async ({ page }) => {
+  const bolsa = { consola: [], excepciones: [], http: [] }
+  vigilar(page, bolsa)
+
+  const correo = correoDePrueba('humo')
+  await crearClienteDirecto(correo)
+  await entrarComoCliente(page, correo, 'Password123')
+
+  for (const ruta of ['/client/book', '/client/appointments', '/client/profile']) {
+    await page.goto(ruta)
+    await page.waitForTimeout(900)
+  }
+
+  console.log('\n--- CLIENTE ---')
+  console.log('HTTP >=400:', bolsa.http.length ? bolsa.http : 'ninguno')
+  console.log('errores de consola:', bolsa.consola.length ? bolsa.consola : 'ninguno')
+  console.log('excepciones:', bolsa.excepciones.length ? bolsa.excepciones : 'ninguna')
+
+  expect(bolsa.excepciones, 'no deberia haber excepciones sin capturar').toEqual([])
+  expect(bolsa.http, 'no deberia haber respuestas HTTP de error').toEqual([])
+})

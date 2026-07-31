@@ -1,0 +1,34 @@
+# Superposicion solo para las pruebas end-to-end.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+# Anade un servidor SMTP desechable (mailpit) y apunta el backend hacia el, para
+# que los flujos que dependen del correo —registro y 2FA— se puedan ejercitar
+# sin mandar nada de verdad. Mailpit expone una API HTTP en el puerto 8025 que
+# las pruebas usan para leer el codigo que llego al buzon.
+#
+# NO uses esta superposicion en produccion: el correo se queda en el contenedor.
+
+services:
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # interfaz web y API HTTP
+      # 1025 es SMTP; no hace falta publicarlo, el backend lo alcanza por la red interna
+
+  backend:
+    environment:
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_USER: ""
+      MAIL_PASS: ""
+      MAIL_FROM: MotoWash <no-reply@motowash.test>
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
