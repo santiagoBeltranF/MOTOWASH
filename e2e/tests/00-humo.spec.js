@@ -28,7 +28,7 @@ const vigilar = (page, bolsa) => {
   })
 }
 
-test('las 8 pantallas del admin cargan sin errores', async ({ page }) => {
+test('@ui las 8 pantallas del admin cargan sin errores', async ({ page }) => {
   const bolsa = { consola: [], excepciones: [], http: [] }
   vigilar(page, bolsa)
   await entrarComoAdmin(page)
@@ -64,7 +64,7 @@ test('las 8 pantallas del admin cargan sin errores', async ({ page }) => {
   expect(bolsa.http, 'no deberia haber respuestas HTTP de error').toEqual([])
 })
 
-test('las 3 pantallas del cliente cargan sin errores', async ({ page }) => {
+test('@ui las 3 pantallas del cliente cargan sin errores', async ({ page }) => {
   const bolsa = { consola: [], excepciones: [], http: [] }
   vigilar(page, bolsa)
 

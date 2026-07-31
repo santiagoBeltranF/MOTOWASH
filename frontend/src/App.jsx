@@ -9,6 +9,7 @@ import Dashboard from './pages/admin/Dashboard'
 import Services from './pages/admin/Services'
 import Schedule from './pages/admin/Schedule'
 import Appointments from './pages/admin/Appointments'
+import Caja from './pages/admin/Caja'
 import Promotions from './pages/admin/Promotions'
 import Clients from './pages/admin/Clients'
 import Reports from './pages/admin/Reports'
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="services" element={<PrivateRoute roles={['admin']}><Services /></PrivateRoute>} />
         <Route path="schedule" element={<PrivateRoute roles={['admin']}><Schedule /></PrivateRoute>} />
         <Route path="appointments" element={<Appointments />} />
+        <Route path="cash" element={<Caja />} />
         <Route path="promotions" element={<PrivateRoute roles={['admin']}><Promotions /></PrivateRoute>} />
         <Route path="clients" element={<Clients />} />
         <Route path="reports" element={<PrivateRoute roles={['admin']}><Reports /></PrivateRoute>} />

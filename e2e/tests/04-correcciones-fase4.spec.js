@@ -95,7 +95,7 @@ test('1. contrasena actual incorrecta muestra el mensaje, no expulsa', async ({ 
 
 // --- Hallazgo 2: recargar durante el 2FA ------------------------------------
 
-test('2. recargar durante el 2FA permite continuar', async ({ page }) => {
+test('@ui 2. recargar durante el 2FA permite continuar', async ({ page }) => {
   const correo = correoDePrueba('recarga')
   await crearCon2FA(correo)
   await vaciarBuzon()
@@ -108,7 +108,7 @@ test('2. recargar durante el 2FA permite continuar', async ({ page }) => {
   await expect(page, 'tras recargar, el codigo correcto debe seguir sirviendo').toHaveURL(/\/client/, { timeout: 15_000 })
 })
 
-test('2. sin 2FA en curso, /verify-2fa avisa y devuelve al login', async ({ page }) => {
+test('@ui 2. sin 2FA en curso, /verify-2fa avisa y devuelve al login', async ({ page }) => {
   await page.goto('/login')
   await page.evaluate(() => sessionStorage.clear())
   await page.goto('/verify-2fa')
@@ -119,7 +119,7 @@ test('2. sin 2FA en curso, /verify-2fa avisa y devuelve al login', async ({ page
 
 // --- Hallazgo 5: el perfil refresca el nombre en toda la aplicacion ----------
 
-test('5. cambiar el nombre lo actualiza en la cabecera sin recargar', async ({ page }) => {
+test('@ui 5. cambiar el nombre lo actualiza en la cabecera sin recargar', async ({ page }) => {
   const correo = correoDePrueba('nombre')
   await crearClienteDirecto(correo)
   await entrarComoCliente(page, correo, 'Password123')
@@ -141,7 +141,7 @@ test('5. cambiar el nombre lo actualiza en la cabecera sin recargar', async ({ p
 
 // --- Hallazgo 6: el asistente se reinicia al pulsar "Agendar" ---------------
 
-test('6. pulsar Agendar tras reservar reinicia el asistente', async ({ page }) => {
+test('@ui 6. pulsar Agendar tras reservar reinicia el asistente', async ({ page }) => {
   const correo = correoDePrueba('reinicio')
   await crearClienteDirecto(correo)
   await entrarComoCliente(page, correo, 'Password123')
@@ -162,7 +162,7 @@ test('6. pulsar Agendar tras reservar reinicia el asistente', async ({ page }) =
 
 // --- Hallazgo 7: los labels estan asociados a sus campos --------------------
 
-test('7. los formularios se pueden manejar por etiqueta', async ({ page }) => {
+test('@ui 7. los formularios se pueden manejar por etiqueta', async ({ page }) => {
   await page.goto('/login')
   await page.getByLabel('Correo electrónico').fill('prueba@labels.local')
   await page.getByLabel('Contraseña').fill('unaclave123')
@@ -177,7 +177,7 @@ test('7. los formularios se pueden manejar por etiqueta', async ({ page }) => {
 
 // --- Cobertura que faltaba: domingo cerrado --------------------------------
 
-test('domingo no ofrece horarios en la interfaz', async ({ page }) => {
+test('@ui domingo no ofrece horarios en la interfaz', async ({ page }) => {
   const correo = correoDePrueba('domingo')
   await crearClienteDirecto(correo)
   await entrarComoCliente(page, correo, 'Password123')

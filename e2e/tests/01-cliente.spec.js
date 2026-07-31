@@ -9,7 +9,7 @@ test.afterAll(async () => { await limpiarDatosDePrueba() })
 // Va todo en un solo test a proposito: es un recorrido, cada paso depende del
 // anterior. Partirlo obligaria a compartir estado entre tests, y Playwright
 // reinicia el worker cuando uno falla, con lo que ese estado se pierde.
-test('recorrido completo del cliente', async ({ page }) => {
+test('@ui recorrido completo del cliente', async ({ page }) => {
   test.setTimeout(180_000)
   const CLAVE = 'Password123'
   const NUEVA = 'NuevaClave456'

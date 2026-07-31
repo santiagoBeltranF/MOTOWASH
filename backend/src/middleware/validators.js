@@ -180,3 +180,42 @@ export const preciosRules = [
   body('prices.*.category_id').isInt({ min: 1 }).withMessage('Categoría inválida'),
   body('prices.*.price').isFloat({ min: 0 }).withMessage('El precio debe ser un número mayor o igual a 0')
 ]
+
+// --- Caja, cobros y recibos ------------------------------------------------
+
+export const abrirTurnoRules = [
+  body('opening_amount').isFloat({ min: 0 }).withMessage('La base inicial debe ser un número mayor o igual a 0'),
+  body('notes').optional({ values: 'falsy' }).trim()
+    .isLength({ max: 500 }).withMessage('Las notas no pueden pasar de 500 caracteres')
+]
+
+export const cerrarTurnoRules = [
+  body('counted_amount').isFloat({ min: 0 }).withMessage('El conteo debe ser un número mayor o igual a 0'),
+  body('notes').optional({ values: 'falsy' }).trim()
+    .isLength({ max: 500 }).withMessage('Las notas no pueden pasar de 500 caracteres')
+]
+
+export const cobroRules = [
+  body('appointment_id').isInt({ min: 1 }).withMessage('Cita inválida'),
+  body('discount_amount').optional({ values: 'falsy' }).isFloat({ min: 0 })
+    .withMessage('El descuento debe ser un número mayor o igual a 0'),
+  // El motivo es obligatorio cuando hay descuento. El cajero puede descontar,
+  // nunca recargar, asi que no existe el caso contrario.
+  body('discount_reason').custom((valor, { req }) => {
+    const desc = Number(req.body.discount_amount || 0)
+    if (desc > 0 && !String(valor || '').trim()) {
+      throw new Error('Un descuento necesita motivo')
+    }
+    return true
+  }),
+  body('payments').isArray({ min: 1 }).withMessage('Falta el desglose del pago'),
+  body('payments.*.method').isIn(['cash', 'transfer'])
+    .withMessage('El método de pago solo puede ser efectivo o transferencia'),
+  body('payments.*.amount').isFloat({ min: 0 }).withMessage('Los importes del pago deben ser números mayores o iguales a 0')
+]
+
+export const anularReciboRules = [
+  ...idParam,
+  body('reason').trim().notEmpty().withMessage('Anular un cobro necesita motivo')
+    .isLength({ max: 200 }).withMessage('El motivo no puede pasar de 200 caracteres')
+]

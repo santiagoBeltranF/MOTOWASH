@@ -40,7 +40,7 @@ const entrarComoCajero = async (page) => {
 test.describe('rol de cajero', () => {
   test.beforeAll(async () => { await crearCajero() })
 
-  test('entra al panel y ve solo lo suyo', async ({ page }) => {
+  test('@ui entra al panel y ve solo lo suyo', async ({ page }) => {
     await entrarComoCajero(page)
 
     // Lo que SÍ debe ver
@@ -279,7 +279,7 @@ test.describe('matriz de precios', () => {
     expect(String(fila[0].price), 'debe guardarse exacto, sin coma flotante').toBe('41500.00')
   })
 
-  test('una categoría inactiva se puede activar sin migrar', async ({ page }) => {
+  test('@ui una categoría inactiva se puede activar sin migrar', async ({ page }) => {
     await page.goto('/admin/services')
     await expect(page.getByRole('heading', { name: /precios por tipo de moto/i })).toBeVisible({ timeout: 15_000 })
 

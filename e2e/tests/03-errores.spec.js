@@ -92,7 +92,7 @@ test.describe('Caminos de error desde la interfaz', () => {
     await expect(page.getByText('[E2E] Doble clic')).toHaveCount(1)
   })
 
-  test('sesion expirada: token invalido echa al login', async ({ page }) => {
+  test('@ui sesion expirada: token invalido echa al login', async ({ page }) => {
     await page.goto('/admin/dashboard')
     await page.evaluate(() => localStorage.setItem('mw_token', 'token.completamente.invalido'))
     // El interceptor detecta el token invalido y hace window.location.href, lo
@@ -102,7 +102,7 @@ test.describe('Caminos de error desde la interfaz', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
   })
 
-  test('volver atras tras cerrar sesion no debe mostrar el panel', async ({ page }) => {
+  test('@ui volver atras tras cerrar sesion no debe mostrar el panel', async ({ page }) => {
     await page.goto('/admin/clients')
     await expect(page.getByRole('heading', { name: /clientes/i })).toBeVisible()
 
@@ -120,7 +120,7 @@ test.describe('Caminos de error desde la interfaz', () => {
 
   })
 
-  test('recargar a mitad del 2FA', async ({ page }) => {
+  test('@ui recargar a mitad del 2FA', async ({ page }) => {
     const correo = correoDePrueba('recarga')
     const c = await import('../helpers/datos.js')
     const bcrypt = (await import('bcryptjs')).default
@@ -159,7 +159,7 @@ test.describe('Caminos de error desde la interfaz', () => {
     await expect(page).toHaveURL(/\/client/, { timeout: 10_000 })
   })
 
-  test('agendar en una fecha pasada no debe ser posible', async ({ page }) => {
+  test('@ui agendar en una fecha pasada no debe ser posible', async ({ page }) => {
     const correo = correoDePrueba('pasada')
     await crearClienteDirecto(correo)
     await entrarComoCliente(page, correo, 'Password123')
@@ -175,7 +175,7 @@ test.describe('Caminos de error desde la interfaz', () => {
     }
   })
 
-  test('domingo (cerrado) no ofrece horarios', async ({ page }) => {
+  test('@ui domingo (cerrado) no ofrece horarios', async ({ page }) => {
     const correo = correoDePrueba('domingo')
     await crearClienteDirecto(correo)
     await entrarComoCliente(page, correo, 'Password123')

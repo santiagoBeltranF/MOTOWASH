@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Bike, LayoutDashboard, Wrench, Calendar, Clock, Tag, Users, BarChart3, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { Bike, LayoutDashboard, Wrench, Calendar, Clock, Tag, Users, BarChart3, Settings, LogOut, Menu, X, ChevronRight, Wallet } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
 // `soloAdmin` marca lo que el cajero no debe ver: configuración, servicios,
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin/services', icon: Wrench, label: 'Servicios', soloAdmin: true },
   { to: '/admin/schedule', icon: Clock, label: 'Horarios', soloAdmin: true },
   { to: '/admin/appointments', icon: Calendar, label: 'Citas' },
+  { to: '/admin/cash', icon: Wallet, label: 'Caja' },
   { to: '/admin/promotions', icon: Tag, label: 'Promociones', soloAdmin: true },
   { to: '/admin/clients', icon: Users, label: 'Clientes' },
   { to: '/admin/reports', icon: BarChart3, label: 'Reportes', soloAdmin: true },

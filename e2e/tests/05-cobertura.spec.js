@@ -115,7 +115,7 @@ test.describe('acciones del admin sobre una cita', () => {
 test.describe('volumen de datos', () => {
   test.use({ storageState: 'estado-admin.json' })
 
-  test('con 150 citas la paginacion deja llegar a todas', async ({ page }) => {
+  test('@ui con 150 citas la paginacion deja llegar a todas', async ({ page }) => {
     test.setTimeout(120_000)
     const correo = correoDePrueba('volumen')
     await crearClienteDirecto(correo)
@@ -170,7 +170,7 @@ test.describe('volumen de datos', () => {
 test.describe('paginacion en las otras dos pantallas', () => {
   test.use({ storageState: 'estado-admin.json' })
 
-  test('Clientes y Reportes tambien paginan', async ({ page }) => {
+  test('@ui Clientes y Reportes tambien paginan', async ({ page }) => {
     test.setTimeout(120_000)
     const bcrypt = (await import('bcryptjs')).default
     const db = await conectar()

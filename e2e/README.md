@@ -46,14 +46,40 @@ la sesión en `estado-admin.json`. No es una optimización: `/auth/login` admite
 cada 15 minutos por IP, y todas las pruebas salen de la misma. Sin esto, a partir del
 sexto login la suite falla por el limitador y no por la aplicación.
 
-**Cinco navegadores.** Chromium, Firefox, WebKit y dos perfiles móviles (`Pixel 7`,
-`iPhone 14`). No es adorno: **E8 solo se reproducía en Firefox y WebKit**, nunca en
-Chromium, y de forma intermitente. Una pasada completa son 150 pruebas, unos 6 minutos.
+## Qué corre en cuántos navegadores
+
+No todo necesita cinco motores. La regla:
+
+| Etiqueta | Dónde corre | Qué va aquí |
+|---|---|---|
+| `@ui` | Los 5 navegadores | Interfaz y lo que depende del motor: carga de pantallas, recorridos completos, paginación, sesión y navegación, formularios por etiqueta, móvil |
+| *(sin etiqueta)* | **Solo Chromium** | Lógica de negocio: cobros, arqueo, validaciones, permisos por rol, concurrencia, precios |
+
+Un cobro mixto que no cuadra se comporta igual en WebKit que en Chromium: repetirlo cinco
+veces multiplica el coste sin encontrar nada. En cambio **E8 solo se reproducía en Firefox
+y WebKit** —y de forma intermitente—, así que los recorridos de interfaz sí se repiten.
+
+Chromium ejecuta **todo**; los otros cuatro proyectos llevan `grep: /@ui/`.
+
+Para etiquetar una prueba basta con el prefijo en el nombre:
+
+```js
+test('@ui recargar a mitad del 2FA', async ({ page }) => { … })
+```
+
+## Cómo ejecutarla
+
+**Durante el desarrollo, solo Chromium.** La pasada de cinco navegadores se hace **una vez
+al cerrar cada bloque**, no en cada iteración.
 
 ```bash
-npm test -- --project=chromium        # solo uno, para iterar rapido
-npm test -- --repeat-each=8           # para cazar fallos intermitentes
+npm test -- --project=chromium   # desarrollo: ~2 min
+npm test                         # cierre de bloque: los 5 navegadores
+npm test -- --repeat-each=8      # cazar fallos intermitentes
 ```
+
+⚠️ **No lances dos ejecuciones a la vez.** Comparten la misma base de datos y se pisan
+entre sí: aparecen fallos que no son de la aplicación.
 
 **Un solo worker.** Comparten una misma base de datos; en paralelo se pisarían las citas
 y los ajustes.

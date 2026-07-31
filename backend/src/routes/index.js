@@ -6,13 +6,16 @@ import {
   idParam, loginRules, registerRules, codigoRules, perfilRules, passwordRules,
   servicioRules, crearCitaRules, reagendarRules, estadoCitaRules,
   crearPromocionRules, actualizarPromocionRules, horarioRules, settingsRules,
-  invitadoRules, convertirInvitadoRules, citaPanelRules, categoriaRules, preciosRules
+  invitadoRules, convertirInvitadoRules, citaPanelRules, categoriaRules, preciosRules,
+  abrirTurnoRules, cerrarTurnoRules, cobroRules, anularReciboRules
 } from '../middleware/validators.js'
 import { login, verify2FA, register, verifyRegister, getMe, updateProfile, changePassword } from '../controllers/authController.js'
 import { getServices, createService, updateService, deleteService } from '../controllers/serviceController.js'
 import { getAvailableSlots, createAppointment, createAppointmentFromPanel, getAppointments, cancelAppointment, updateAppointmentStatus, rescheduleAppointment, getActivePendingAppointment } from '../controllers/appointmentController.js'
 import { createGuest, convertGuest, searchClients } from '../controllers/guestController.js'
 import { getCategories, updateCategory, getPriceMatrix, updatePrices } from '../controllers/categoryController.js'
+import { getTurnoActual, abrirTurno, cerrarTurno, listarTurnos } from '../controllers/cashController.js'
+import { cobrarCita, anularRecibo, listarRecibos, verRecibo } from '../controllers/receiptController.js'
 import { getPromotions, getActivePromotion, createPromotion, updatePromotion, deletePromotion } from '../controllers/promotionController.js'
 import { getSchedule, updateSchedule, getSettings, updateSettings, getClients, toggleClientStatus } from '../controllers/settingsController.js'
 import { getDashboardStats, getRevenueReport, getClientsReport, getAppointmentsReport } from '../controllers/reportController.js'
@@ -92,6 +95,18 @@ router.get('/categories', authenticate, getCategories)
 router.put('/categories/:id', authenticate, requireAdmin, categoriaRules, validar, updateCategory)
 router.get('/service-prices', authenticate, requireStaff, getPriceMatrix)
 router.put('/service-prices', authenticate, requireAdmin, preciosRules, validar, updatePrices)
+
+// Caja: turno abierto, apertura y cierre
+router.get('/cash/current', authenticate, requireStaff, getTurnoActual)
+router.get('/cash/shifts', authenticate, requireStaff, listarTurnos)
+router.post('/cash/open', authenticate, requireStaff, abrirTurnoRules, validar, abrirTurno)
+router.post('/cash/close', authenticate, requireStaff, cerrarTurnoRules, validar, cerrarTurno)
+
+// Cobros y recibos
+router.get('/receipts', authenticate, requireStaff, listarRecibos)
+router.get('/receipts/:id', authenticate, requireStaff, idParam, validar, verRecibo)
+router.post('/receipts', authenticate, requireStaff, cobroRules, validar, cobrarCita)
+router.post('/receipts/:id/void', authenticate, requireStaff, anularReciboRules, validar, anularRecibo)
 
 // Promotions
 router.get('/promotions', authenticate, requireAdmin, getPromotions)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, AlertTriangle } from 'lucide-react'
+import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, AlertTriangle, Wallet } from 'lucide-react'
 import api from '../../utils/api'
 import Paginacion from '../../components/Paginacion'
 import NuevaCitaPanel from '../../components/NuevaCitaPanel'
+import CobroModal from '../../components/CobroModal'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -39,6 +40,7 @@ export default function Appointments() {
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ status: '', date: '', plate: '' })
   const [modalNueva, setModalNueva] = useState(false)
+  const [citaACobrar, setCitaACobrar] = useState(null)
   const [pagina, setPagina] = useState(1)
   const [meta, setMeta] = useState({ total: 0, totalPages: 1, limit: 20 })
 
@@ -173,6 +175,14 @@ export default function Appointments() {
                             <CheckCircle className="w-4 h-4" />
                           </button>
                         )}
+                        {/* Cobrar: solo si no está cobrada ni cancelada */}
+                        {!a.paid_receipt_id && a.status !== 'cancelled' && (
+                          <button onClick={() => setCitaACobrar(a)} title="Cobrar"
+                            className="p-1.5 hover:bg-brand-50 text-gray-400 hover:text-brand-600 rounded-lg transition-colors">
+                            <Wallet className="w-4 h-4" />
+                          </button>
+                        )}
+                        {a.paid_receipt_id ? <span className="badge-green">Cobrada</span> : null}
                         {/* Botón para cancelar (disponible para pendientes y confirmadas) */}
                         {a.status !== 'cancelled' && a.status !== 'completed' && (
                           <button onClick={() => cancel(a.id)} title="Cancelar"
@@ -198,6 +208,7 @@ export default function Appointments() {
       </div>
 
       <NuevaCitaPanel abierto={modalNueva} onCerrar={() => setModalNueva(false)} onCreada={load} />
+      <CobroModal cita={citaACobrar} onCerrar={() => setCitaACobrar(null)} onCobrado={load} />
     </div>
   )
 }

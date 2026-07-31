@@ -620,9 +620,62 @@ el cliente también lo lee. No puede editarlo (`PUT` da 403) ni ve esa pantalla 
 Si se quisiera cerrar del todo habría que separar la lectura del horario de negocio de la
 pantalla de configuración.
 
+### Bloque 2 — Caja y cobro ✅
+
+**Turno de caja.** Un turno pertenece a **un** día de operación y no se arrastra ni se
+cierra solo. Si queda abierto de un día anterior queda **vencido**: bloquea el cobro hasta
+que alguien lo cierre con conteo real, y ese cierre se registra como tardío
+(`was_late_close`) conservando cuándo se abrió y cuándo se cerró de verdad.
+
+«Vencido» **se deriva, no se guarda**: un turno abierto de un día anterior lo está por
+definición. Una bandera almacenada necesitaría un proceso que la pusiera al día y podría
+quedar desfasada.
+
+*Un solo turno abierto a la vez* lo garantiza la **base**, no solo el código: una columna
+generada vale 1 mientras el turno está abierto y NULL al cerrarse, con índice único encima.
+MySQL admite varios NULL en un índice único, así que los turnos cerrados no chocan.
+
+**El arqueo es solo sobre efectivo.** Una transferencia no pasa por el cajón. Verificado:
+base 50.000 + 7.000 en efectivo (de un cobro mixto de 12.000) = 57.000 esperados.
+
+**Consecutivo global y continuo.** No se usa `AUTO_INCREMENT`, que deja huecos en cada
+transacción fallida: se bloquea una fila contador con `FOR UPDATE` dentro de la misma
+transacción que inserta el recibo. Si algo falla, el número vuelve a quedar libre.
+
+**El precio queda congelado en la línea del recibo.** Verificado cambiando la tarifa a
+99.000 y renombrando el servicio *después* del cobro: el recibo sigue diciendo
+«Lavado Básico — 15.000». Se copian también los nombres, porque renombrar un servicio no
+puede cambiar lo que dice un recibo de hace un año.
+
+**El pago es completo.** La suma de los métodos tiene que dar el total exacto, comparada
+en centavos enteros. La pantalla muestra el descuadre en vivo y deshabilita el botón.
+
+**Anular no borra.** Se marca, se guarda motivo, autor y momento, y la cita vuelve a poder
+cobrarse. El consecutivo no reutiliza el número anulado.
+
+**La cita guarda el recibo, no una bandera** (`paid_receipt_id`): un booleano puede
+desincronizarse, una clave ajena no.
+
+#### Un bug propio, encontrado por las pruebas
+
+`String(fecha).slice(0, 10)` sobre una columna `DATE` da **«Thu Jul 30»**, no
+«2026-07-30», porque mysql2 devuelve las fechas como objetos `Date`. La comparación de
+turno vencido nunca era cierta. Apareció el mismo error **dos veces**: en el backend y en
+la aserción de la propia prueba. Corregido con un normalizador `aISO()`.
+
+### Coste de la suite
+
+Las pruebas se etiquetan: `@ui` corre en los cinco navegadores, el resto **solo en
+Chromium**. Un cobro mixto que no cuadra se comporta igual en WebKit; repetirlo cinco
+veces multiplica el coste sin encontrar nada. Los recorridos de interfaz sí se repiten,
+porque **E8 solo se reproducía fuera de Chromium**.
+
+De **270 ejecuciones a 126**. Durante el desarrollo se usa solo Chromium (~1,5 min); la
+pasada completa se hace una vez al cerrar cada bloque (~5 min).
+
 ### Pendiente de la Fase 5
 
-Bloques 2 a 5: turno de caja y cobro, recibo impreso a 80 mm, reporte contable y dashboard.
+Bloques 3 a 5: recibo impreso a 80 mm, reporte contable y dashboard.
 
 ---
 

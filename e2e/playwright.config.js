@@ -37,16 +37,20 @@ export default defineConfig({
     timezoneId: 'America/Bogota'
   },
 
+  // Solo lo etiquetado @ui se ejecuta en los cuatro navegadores extra. La
+  // lógica de negocio —cobros, arqueo, validaciones, permisos por rol— no
+  // depende del motor del navegador: repetirla cinco veces multiplica el coste
+  // sin encontrar nada. Chromium sigue ejecutándolo TODO.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'firefox', grep: /@ui/, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', grep: /@ui/, use: { ...devices['Desktop Safari'] } },
 
     // Movil de verdad, no una ventana estrecha: los perfiles de dispositivo
     // traen ademas user agent tactil, escala y `hasTouch`, y eso cambia como se
     // comportan los controles. Importa porque el menu del cliente es una barra
     // inferior de aspecto movil que hasta ahora solo se habia visto a 1280 px.
-    { name: 'movil-android', use: { ...devices['Pixel 7'] } },
-    { name: 'movil-ios', use: { ...devices['iPhone 14'] } }
+    { name: 'movil-android', grep: /@ui/, use: { ...devices['Pixel 7'] } },
+    { name: 'movil-ios', grep: /@ui/, use: { ...devices['iPhone 14'] } }
   ]
 })
