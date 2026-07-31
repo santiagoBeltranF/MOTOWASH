@@ -497,3 +497,28 @@ docker compose exec db mysql -u root -p motowash_db -e "
 ⚠️ **Se ejecuta una sola vez.** Repetirla sobre datos ya reparados vuelve a corromperlos.
 Los `WHERE` acotan el daño, pero haz un volcado antes:
 `docker compose exec db mysqldump -u root -p motowash_db > respaldo.sql`
+
+---
+
+## Qué queda sin verificar
+
+Estado tras la Fase 4. No son hallazgos: son huecos de cobertura conocidos. Se dejan
+escritos porque la lección de C7 y C8 fue justamente esa — lo que no se ejercita, no se
+sabe si funciona.
+
+| Hueco | Por qué importa |
+|---|---|
+| **Un solo navegador** | Toda la suite corre en Chromium. Sin Firefox ni WebKit. |
+| **Sin viewport móvil** | Todo se probó a 1280 px, pero el menú del cliente es una barra inferior de aspecto móvil. Es justo lo que un usuario real usaría desde el teléfono. |
+| **Envío real por Gmail** | Las pruebas usan un buzón desechable (mailpit). Que `MAIL_USER`/`MAIL_PASS` reales funcionen contra `smtp.gmail.com` no está comprobado desde que se revocó la App Password anterior. |
+| **Concurrencia desde la interfaz** | C5 se demostró por API con 30 rondas, no con dos navegadores reservando la misma franja a la vez. |
+| **Volumen de datos** | Las listas se probaron con pocas filas. Con cientos de citas empezaría a notarse el tope de paginación de M4, y **la interfaz no tiene controles de página**. |
+| **Acciones del admin sobre citas** | Se verificó que la pantalla de Citas lista datos, pero no cancelar una cita ni marcarla como completada desde el panel. |
+| **Cifras de los informes** | Los dos informes cargan sin error, pero con la base casi vacía. No se ha validado que los totales, ingresos y agrupaciones sean correctos. |
+
+### Cómo cerrar cada hueco
+
+Los cuatro primeros son ampliaciones de `e2e/`: añadir proyectos de Firefox y WebKit y un
+`devices['Pixel 7']` en `playwright.config.js` cubre los dos primeros; la concurrencia,
+dos contextos de navegador en paralelo. Los tres últimos necesitan antes un juego de datos
+de prueba con volumen, que hoy no existe.
