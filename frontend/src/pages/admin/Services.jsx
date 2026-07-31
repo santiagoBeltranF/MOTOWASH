@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Wrench, ToggleLeft, ToggleRight } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import MatrizPrecios from '../../components/MatrizPrecios'
 
 export function Services() {
   const [services, setServices] = useState([])
@@ -36,7 +37,7 @@ export function Services() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-gray-900">Servicios</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestiona los servicios y sus precios</p>
+          <p className="text-gray-500 text-sm mt-1">Gestiona los servicios y sus precios por tipo de moto</p>
         </div>
         <button onClick={openCreate} className="btn-primary"><Plus className="w-4 h-4" /> Nuevo servicio</button>
       </div>
@@ -67,6 +68,8 @@ export function Services() {
           </div>
         ))}
       </div>
+
+      <MatrizPrecios />
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">

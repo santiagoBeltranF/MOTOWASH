@@ -546,6 +546,84 @@ docker compose exec db mysql -u root -p motowash_db -e "
 Los `WHERE` acotan el daño, pero haz un volcado antes:
 `docker compose exec db mysqldump -u root -p motowash_db > respaldo.sql`
 
+
+---
+
+## 🧾 Fase 5 — Módulo de caja (en curso)
+
+A diferencia de las fases 1-4, **esto no son correcciones**: es un módulo nuevo que cambia
+el modelo de datos. Se anota aquí porque toca cosas que las fases anteriores dejaron
+cerradas, y conviene que el rastro esté en el mismo sitio.
+
+### Bloque 1 — Modelo de datos y roles ✅
+
+**Rol `cashier`.** Añadirlo no era una fila más en un ENUM. Había **once sitios** que
+usaban `role === 'admin'` como sinónimo de «no es un cliente»: seis en el backend
+(`appointmentController` ×5, `serviceController`) y cinco en el frontend (`App.jsx` ×2,
+`LoginPage`, `Verify2FAPage`, y la guarda de rutas). Ninguno *fallaba*: **degradaban al
+cajero a cliente en silencio** — le habrían mostrado una lista de citas vacía en vez de la
+del negocio. Se sustituyen por el predicado `esPersonal()` y la guarda `requireStaff`.
+Las pantallas de solo-admin se protegen **también en el enrutador**, no solo ocultando el
+menú: escribir `/admin/settings` a mano tampoco las abre.
+
+**Invitados.** Un cliente sin cuenta es un usuario real con `is_guest = TRUE` y sin
+credenciales, no unos campos sueltos en la cita. Convertirlo es un `UPDATE` sobre la misma
+fila: el `id` no cambia y conserva todo su historial. El login los rechaza de forma
+explícita — sin ese corte, un `password` NULL llegaba a `bcrypt.compare` y reventaba en
+vez de devolver 401.
+
+**Sobrecupo explícito.** Si la franja está llena el backend responde 409 con `CUPO_LLENO`
+y los conteos; la pantalla avisa «esta franja ya tiene N de N» y **solo reintenta si quien
+atiende lo confirma**. Queda marcado en la cita y visible en la lista, para poder contarlo
+en el reporte del Bloque 4.
+
+**Dinero en centavos enteros** (`utils/dinero.js`). Las columnas `DECIMAL` ya eran exactas;
+el problema estaba en JS, donde el cálculo del precio con descuento era aritmética de coma
+flotante. Ahora se parsea con BigInt y se opera con enteros.
+
+**Reutilización, no copia.** El núcleo de reserva se extrajo a `reservarFranja()` y lo
+comparten autoservicio y mostrador: el cerrojo `SELECT ... FOR UPDATE` de **C5** es
+literalmente el mismo código. La validación de **I6** admite «ahora» solo por la vía del
+panel, y sigue rechazando cualquier cosa de más de 12 horas atrás.
+
+### Decisiones tomadas y por qué
+
+| Decisión | Motivo |
+|---|---|
+| Los invitados son usuarios, no campos en la cita | Historial, búsqueda por placa y reportes funcionan sin casos especiales |
+| «Media» nace inactiva **pero con sus precios sembrados** | Activarla es cambiar una bandera, no volver a migrar |
+| `service_prices` es el precio efectivo; `services.price` queda de respaldo | Ningún importe se mueve al migrar |
+| La regla de «una sola cita pendiente» no aplica al panel | Impediría atender dos veces el mismo día al mismo cliente |
+| Validación de placa permisiva (`[A-Z0-9]{5,8}`) | Rechazar una placa extranjera o temporal en el mostrador es peor que aceptar una rara |
+| `attended_by` se añade **sin lógica** | Reservada para comisiones por lavador. Documentada como «nadie la escribe todavía» |
+
+### Un tropiezo propio, y lo que se hizo con él
+
+Al actualizar `database.sql` una sustitución de texto acertó **también dentro de un
+comentario** —la línea de ejemplo del hallazgo M8— y partió el bloque, dejando el script
+con error de sintaxis en la línea 192. Efecto: las tablas nuevas quedaban vacías en una
+instalación limpia.
+
+Se corrigió y, sobre todo, **se añadió un paso de validación**: ejecutar el `.sql` completo
+contra un MySQL desechable antes de tocar el entorno real, comprobando los conteos
+sembrados. Es la contrapartida de la lección de C7 y C8 aplicada al esquema.
+
+```bash
+docker run --rm -d --name sql-lint -e MYSQL_ROOT_PASSWORD=t mysql:8.0
+docker exec -i sql-lint mysql -uroot -pt < backend/src/config/database.sql
+```
+
+### Anotado, sin corregir
+
+`GET /schedule` responde 200 al cajero **a propósito**: necesita el horario para agendar, y
+el cliente también lo lee. No puede editarlo (`PUT` da 403) ni ve esa pantalla en el menú.
+Si se quisiera cerrar del todo habría que separar la lectura del horario de negocio de la
+pantalla de configuración.
+
+### Pendiente de la Fase 5
+
+Bloques 2 a 5: turno de caja y cobro, recibo impreso a 80 mm, reporte contable y dashboard.
+
 ---
 
 ## Qué queda sin verificar

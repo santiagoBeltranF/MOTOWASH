@@ -249,3 +249,49 @@ test.describe('precio por tipo de moto', () => {
     expect(cats.length, 'deben quedar 3 categorías activas: Media nace inactiva').toBe(3)
   })
 })
+
+// --- Pantalla de precios por tipo de moto ----------------------------------
+
+test.describe('matriz de precios', () => {
+  test.use({ storageState: 'estado-admin.json' })
+
+  test('editar un precio desde la pantalla y que persista', async ({ page }) => {
+    await page.goto('/admin/services')
+    await expect(page.getByRole('heading', { name: /precios por tipo de moto/i })).toBeVisible({ timeout: 15_000 })
+
+    // Primer servicio, primera categoría
+    const celda = page.locator('table input[type=number]').first()
+    await celda.fill('41500')
+    await page.getByRole('button', { name: /guardar precios/i }).click()
+    await esperarToast(page, /precios actualizados/i)
+
+    await page.reload()
+    await expect(page.locator('table input[type=number]').first()).toHaveValue('41500.00', { timeout: 15_000 })
+
+    const db = await conectar()
+    const [fila] = await db.query(
+      `SELECT sp.price FROM service_prices sp
+       JOIN services s ON s.id=sp.service_id
+       JOIN motorcycle_categories c ON c.id=sp.category_id
+       ORDER BY s.name, c.sort_order LIMIT 1`
+    )
+    await db.end()
+    expect(String(fila[0].price), 'debe guardarse exacto, sin coma flotante').toBe('41500.00')
+  })
+
+  test('una categoría inactiva se puede activar sin migrar', async ({ page }) => {
+    await page.goto('/admin/services')
+    await expect(page.getByRole('heading', { name: /precios por tipo de moto/i })).toBeVisible({ timeout: 15_000 })
+
+    // «Media» nace inactiva y su columna aparece marcada como tal
+    await expect(page.getByRole('columnheader', { name: /media \(inactiva\)/i })).toBeVisible()
+
+    await page.getByRole('button', { name: /activar media/i }).click()
+    await esperarToast(page, /media activada/i)
+    await expect(page.getByRole('columnheader', { name: /^media$/i })).toBeVisible({ timeout: 10_000 })
+
+    // Se deja como estaba, que las demás pruebas cuentan 3 activas
+    await page.getByRole('button', { name: /desactivar media/i }).click()
+    await esperarToast(page, /media desactivada/i)
+  })
+})
