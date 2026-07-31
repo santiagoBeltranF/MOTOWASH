@@ -5,16 +5,21 @@ import api from '../../utils/api'
 import toast from 'react-hot-toast'
 
 export default function ProfilePage() {
-  const { user } = useAuthStore()
+  const { user, setUser } = useAuthStore()
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' })
   const [passForm, setPassForm] = useState({ current: '', new: '', confirm: '' })
   const [saving, setSaving] = useState(false)
+  const [savingPass, setSavingPass] = useState(false)
 
   const saveProfile = async (e) => {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.put('/auth/profile', form)
+      const res = await api.put('/auth/profile', form)
+      // El backend devuelve el usuario actualizado; hay que llevarlo al estado
+      // global o la cabecera y el avatar se quedan con el nombre anterior hasta
+      // que alguien recargue.
+      if (res.data?.user) setUser(res.data.user)
       toast.success('Perfil actualizado')
     } catch (err) { toast.error(err.response?.data?.message || 'Error') }
     finally { setSaving(false) }
@@ -23,11 +28,13 @@ export default function ProfilePage() {
   const savePassword = async (e) => {
     e.preventDefault()
     if (passForm.new !== passForm.confirm) { toast.error('Las contraseñas no coinciden'); return }
+    setSavingPass(true)
     try {
       await api.put('/auth/password', { currentPassword: passForm.current, newPassword: passForm.new })
       toast.success('Contraseña actualizada')
       setPassForm({ current: '', new: '', confirm: '' })
     } catch (err) { toast.error(err.response?.data?.message || 'Error') }
+    finally { setSavingPass(false) }
   }
 
   return (
@@ -51,24 +58,24 @@ export default function ProfilePage() {
         <h3 className="font-display font-semibold text-gray-900 mb-4">Información personal</h3>
         <form onSubmit={saveProfile} className="space-y-4">
           <div>
-            <label className="label">Nombre completo</label>
+            <label className="label" htmlFor="perfil-nombre">Nombre completo</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input className="input pl-10" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              <input id="perfil-nombre" className="input pl-10" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
             </div>
           </div>
           <div>
-            <label className="label">Correo electrónico</label>
+            <label className="label" htmlFor="perfil-email">Correo electrónico</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input className="input pl-10 bg-gray-50" value={user?.email} disabled />
+              <input id="perfil-email" className="input pl-10 bg-gray-50" value={user?.email} disabled />
             </div>
           </div>
           <div>
-            <label className="label">Teléfono</label>
+            <label className="label" htmlFor="perfil-telefono">Teléfono</label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input className="input pl-10" placeholder="+57 300 000 0000" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+              <input id="perfil-telefono" className="input pl-10" placeholder="+57 300 000 0000" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
             </div>
           </div>
           <button type="submit" disabled={saving} className="btn-primary">
@@ -83,16 +90,16 @@ export default function ProfilePage() {
         <form onSubmit={savePassword} className="space-y-4">
           {[['current', 'Contraseña actual'], ['new', 'Nueva contraseña'], ['confirm', 'Confirmar nueva contraseña']].map(([k, label]) => (
             <div key={k}>
-              <label className="label">{label}</label>
+              <label className="label" htmlFor={`perfil-clave-${k}`}>{label}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="password" className="input pl-10" required minLength={8} value={passForm[k]}
+                <input id={`perfil-clave-${k}`} type="password" className="input pl-10" required minLength={8} value={passForm[k]}
                   onChange={e => setPassForm(p => ({ ...p, [k]: e.target.value }))} />
               </div>
             </div>
           ))}
-          <button type="submit" className="btn-primary">
-            <Lock className="w-4 h-4" /> Actualizar contraseña
+          <button type="submit" disabled={savingPass} className="btn-primary">
+            <Lock className="w-4 h-4" /> {savingPass ? 'Actualizando...' : 'Actualizar contraseña'}
           </button>
         </form>
       </div>

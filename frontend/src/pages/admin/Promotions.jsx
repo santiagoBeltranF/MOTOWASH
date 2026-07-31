@@ -105,30 +105,30 @@ export default function Promotions() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="font-display font-semibold text-lg mb-5">Nueva promoción</h3>
             <form onSubmit={save} className="space-y-4">
-              <div><label className="label">Título</label><input className="input" required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Ej: Descuento de fin de semana" /></div>
-              <div><label className="label">Descripción</label><textarea className="input" rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
-              <div><label className="label">Descuento (%)</label>
-                <input type="number" className="input" required min="1" max="100" value={form.discount_percent}
+              <div><label className="label" htmlFor="promo-titulo">Título</label><input id="promo-titulo" className="input" required value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Ej: Descuento de fin de semana" /></div>
+              <div><label className="label" htmlFor="promo-descripcion">Descripción</label><textarea id="promo-descripcion" className="input" rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
+              <div><label className="label" htmlFor="promo-descuento">Descuento (%)</label>
+                <input id="promo-descuento" type="number" className="input" required min="1" max="100" value={form.discount_percent}
                   onChange={e => setForm(p => ({ ...p, discount_percent: parseFloat(e.target.value) }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Inicio</label><input type="datetime-local" className="input" required value={form.starts_at} onChange={e => setForm(p => ({ ...p, starts_at: e.target.value }))} /></div>
-                <div><label className="label">Fin</label><input type="datetime-local" className="input" required value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="promo-inicio">Inicio</label><input id="promo-inicio" type="datetime-local" className="input" required value={form.starts_at} onChange={e => setForm(p => ({ ...p, starts_at: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="promo-fin">Fin</label><input id="promo-fin" type="datetime-local" className="input" required value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))} /></div>
               </div>
               <div>
-                <label className="label">Aplica a</label>
-                <select className="input" value={form.applies_to} onChange={e => setForm(p => ({ ...p, applies_to: e.target.value }))}>
+                <label className="label" htmlFor="promo-aplica">Aplica a</label>
+                <select id="promo-aplica" className="input" value={form.applies_to} onChange={e => setForm(p => ({ ...p, applies_to: e.target.value }))}>
                   <option value="all">Todos los servicios</option>
                   <option value="specific">Servicios específicos</option>
                 </select>
               </div>
               {form.applies_to === 'specific' && (
                 <div>
-                  <label className="label">Selecciona servicios</label>
+                  <label className="label" htmlFor="promo-servicios">Selecciona servicios</label>
                   <div className="space-y-2 border border-gray-200 rounded-lg p-3">
                     {services.map(s => (
                       <label key={s.id} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form.service_ids.includes(s.id)}
+                        <input id="promo-servicios" type="checkbox" checked={form.service_ids.includes(s.id)}
                           onChange={e => setForm(p => ({ ...p, service_ids: e.target.checked ? [...p.service_ids, s.id] : p.service_ids.filter(id => id !== s.id) }))}
                           className="w-4 h-4 text-brand-600" />
                         <span className="text-sm text-gray-700">{s.name} — ${Number(s.price).toLocaleString('es-CO')}</span>

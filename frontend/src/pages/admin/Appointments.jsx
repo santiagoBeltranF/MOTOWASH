@@ -78,8 +78,8 @@ export default function Appointments() {
       <div className="card">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="label">Estado</label>
-            <select className="input" value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
+            <label className="label" htmlFor="citas-estado">Estado</label>
+            <select id="citas-estado" className="input" value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
               <option value="">Todos</option>
               <option value="confirmed">Confirmada</option>
               <option value="completed">Completada</option>
@@ -88,8 +88,8 @@ export default function Appointments() {
             </select>
           </div>
           <div>
-            <label className="label">Fecha</label>
-            <input type="date" className="input" value={filters.date} onChange={e => setFilters(p => ({ ...p, date: e.target.value }))} />
+            <label className="label" htmlFor="citas-fecha">Fecha</label>
+            <input id="citas-fecha" type="date" className="input" value={filters.date} onChange={e => setFilters(p => ({ ...p, date: e.target.value }))} />
           </div>
         </div>
       </div>

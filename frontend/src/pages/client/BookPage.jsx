@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Clock, Tag, CheckCircle } from 'lucide-react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
@@ -25,6 +26,17 @@ export default function BookPage() {
   const [checkingPending, setCheckingPending] = useState(true)
   const [isRescheduling, setIsRescheduling] = useState(false)
 
+  const location = useLocation()
+
+  const reiniciarAsistente = () => {
+    setStep(1)
+    setSelectedService(null)
+    setSelectedDate(null)
+    setSelectedSlot(null)
+    setNotes('')
+    setIsRescheduling(false)
+  }
+
   const loadActivePending = () => {
     setCheckingPending(true)
     api.get('/appointments/active-pending')
@@ -39,6 +51,15 @@ export default function BookPage() {
     loadActivePending()
     api.get('/services').then(r => { setServices(r.data.services); setPromo(r.data.activePromotion) }).catch(() => toast.error('Error cargando servicios'))
   }, [])
+
+  // Pulsar "Agendar" en el menu estando ya en esta ruta no remonta el
+  // componente, asi que el asistente se quedaba clavado en la pantalla de
+  // "¡Cita confirmada!" y el menu parecia no responder. React Router genera una
+  // clave de navegacion nueva en cada pulsacion: se usa para reiniciar.
+  useEffect(() => {
+    reiniciarAsistente()
+    loadActivePending()
+  }, [location.key])
 
   useEffect(() => {
     if (!selectedDate || !selectedService) return
@@ -121,12 +142,7 @@ export default function BookPage() {
       <p className="text-gray-500 mb-6">a las {selectedSlot}</p>
       <p className="text-sm text-brand-600 mb-8">Te enviamos los detalles de tu cita al correo electrónico</p>
       <button onClick={() => {
-        setStep(1)
-        setSelectedService(null)
-        setSelectedDate(null)
-        setSelectedSlot(null)
-        setNotes('')
-        setIsRescheduling(false)
+        reiniciarAsistente()
         loadActivePending() // Recargar estado por si quiere agendar otra
       }}
         className="btn-primary">Volver al inicio</button>
@@ -336,8 +352,8 @@ export default function BookPage() {
           
           {!isRescheduling && (
             <div>
-              <label className="label">Notas adicionales (opcional)</label>
-              <textarea className="input" rows={3} placeholder="Ej: Color de la moto, alguna indicación especial..." value={notes} onChange={e => setNotes(e.target.value)} />
+              <label className="label" htmlFor="cita-notas">Notas adicionales (opcional)</label>
+              <textarea id="cita-notas" className="input" rows={3} placeholder="Ej: Color de la moto, alguna indicación especial..." value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
           )}
           

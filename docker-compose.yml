@@ -7,6 +7,11 @@ services:
   db:
     image: mysql:8.0
     restart: unless-stopped
+    # utf8mb4 de servidor por defecto, para que cualquier cliente que no declare
+    # su juego de caracteres no vuelva a caer en latin1 y corrompa las tildes.
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?falta MYSQL_ROOT_PASSWORD en el .env de la raiz}
       # Tiene que coincidir con el `CREATE DATABASE` / `USE` de database.sql.

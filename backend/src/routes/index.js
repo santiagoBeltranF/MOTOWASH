@@ -16,15 +16,30 @@ import { getDashboardStats, getRevenueReport, getClientsReport, getAppointmentsR
 
 const router = express.Router()
 
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { message: 'Demasiados intentos. Intenta en 15 minutos.' } })
+// Los limites son configurables por entorno, con el valor de produccion como
+// defecto: si no se define nada, se comporta exactamente igual que antes.
+//
+// Existe porque las pruebas end-to-end salen todas de la misma IP y agotaban el
+// limite de login a mitad de la suite, con lo que fallaban por el limitador y
+// no por la aplicacion. Se sube en docker-compose.test.yml, nunca en el codigo.
+const numeroDeEntorno = (nombre, pordefecto) => {
+  const v = parseInt(process.env[nombre], 10)
+  return Number.isFinite(v) && v > 0 ? v : pordefecto
+}
+
+const loginLimiter = rateLimit({
+  windowMs: numeroDeEntorno('RATE_LIMIT_LOGIN_WINDOW_MIN', 15) * 60 * 1000,
+  max: numeroDeEntorno('RATE_LIMIT_LOGIN_MAX', 5),
+  message: { message: 'Demasiados intentos. Intenta en 15 minutos.' }
+})
 
 // /auth/register dispara un envio de correo a una direccion arbitraria en cada
 // peticion. Sin limite es una bomba de correo con nuestro dominio como
 // remitente, y Gmail acaba suspendiendo la cuenta. La ventana es de una hora
 // porque registrarse es algo que se hace una vez, no repetidamente.
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
+  windowMs: numeroDeEntorno('RATE_LIMIT_REGISTER_WINDOW_MIN', 60) * 60 * 1000,
+  max: numeroDeEntorno('RATE_LIMIT_REGISTER_MAX', 5),
   message: { message: 'Demasiados registros desde esta conexión. Intenta en una hora.' }
 })
 
@@ -32,8 +47,8 @@ const registerLimiter = rateLimit({
 // contra la fuerza bruta del codigo de 6 digitos; la primera es el contador de
 // intentos por codigo que lleva authController (MAX_INTENTOS_CODIGO).
 const verifyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 15,
+  windowMs: numeroDeEntorno('RATE_LIMIT_VERIFY_WINDOW_MIN', 15) * 60 * 1000,
+  max: numeroDeEntorno('RATE_LIMIT_VERIFY_MAX', 15),
   message: { message: 'Demasiados intentos de verificación. Intenta en 15 minutos.' }
 })
 

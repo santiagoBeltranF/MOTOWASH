@@ -2,6 +2,15 @@
 -- MOTOWASH DATABASE SCHEMA
 -- ============================================
 
+-- OBLIGATORIO y tiene que ir lo primero.
+--
+-- Este archivo esta guardado en UTF-8, pero el cliente de MySQL arranca con
+-- character_set_client = latin1. Sin esta linea, el servidor interpreta como
+-- latin1 los bytes UTF-8 de los datos iniciales y los guarda doble-codificados
+-- en columnas utf8mb4: "Lavado Básico" acababa almacenado como "Lavado BÃ¡sico"
+-- y asi se mostraba a todos los clientes.
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE DATABASE IF NOT EXISTS motowash_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE motowash_db;
 

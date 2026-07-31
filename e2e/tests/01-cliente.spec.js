@@ -44,9 +44,7 @@ test('recorrido completo del cliente', async ({ page }) => {
 
   await test.step('agendar una cita', async () => {
     await expect(page.getByRole('heading', { name: /agendar cita/i })).toBeVisible()
-    // Se elige por posicion y no por nombre: los nombres con tilde estan
-    // corrompidos en la base (ver informe), asi que "Lavado Básico" no casa.
-    await page.locator('button', { hasText: /minutos/ }).first().click()
+    await page.getByText('Lavado Básico', { exact: false }).first().click()
 
     await expect(page.getByText(/selecciona la fecha/i)).toBeVisible()
     const dia = proximoDiaLaborable(3)
@@ -82,9 +80,7 @@ test('recorrido completo del cliente', async ({ page }) => {
 
   await test.step('cancelar la cita', async () => {
     page.on('dialog', d => d.accept())
-    // Hay que usar "Volver al inicio": pulsar "Agendar" en el menu no reinicia
-    // el asistente porque es la misma ruta y el componente no se remonta.
-    await page.getByRole('button', { name: /volver al inicio/i }).click()
+    await page.getByRole('link', { name: /agendar/i }).click()
     await expect(page.getByText(/ya tienes una cita pendiente activa/i)).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: /cancelar cita/i }).click()
     await esperarToast(page, /cita cancelada/i)
@@ -101,10 +97,8 @@ test('recorrido completo del cliente', async ({ page }) => {
 
     // El nombre de la cabecera y de la tarjeta deberia reflejar el cambio sin
     // tener que recargar: la sesion en memoria sigue teniendo el nombre viejo.
-    // expect.soft: se anota el fallo pero el recorrido continua, para recoger
-    // todos los problemas en una sola pasada.
-    await expect.soft(page.locator('header').getByText('Nombre Cambiado'),
-      'la cabecera deberia mostrar el nombre nuevo sin recargar').toBeVisible({ timeout: 8000 })
+    await expect(page.locator('header').getByText('Nombre Cambiado'),
+      'la cabecera debe mostrar el nombre nuevo sin recargar').toBeVisible({ timeout: 8000 })
   })
 
   await test.step('perfil: cambiar contrasena', async () => {

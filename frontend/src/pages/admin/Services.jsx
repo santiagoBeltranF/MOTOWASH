@@ -73,11 +73,11 @@ export function Services() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h3 className="font-display font-semibold text-lg mb-5">{modal === 'create' ? 'Nuevo servicio' : 'Editar servicio'}</h3>
             <form onSubmit={save} className="space-y-4">
-              <div><label className="label">Nombre</label><input className="input" required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
-              <div><label className="label">Descripción</label><textarea className="input" rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
+              <div><label className="label" htmlFor="servicio-nombre">Nombre</label><input id="servicio-nombre" className="input" required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+              <div><label className="label" htmlFor="servicio-descripcion">Descripción</label><textarea id="servicio-descripcion" className="input" rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Precio (COP)</label><input type="number" className="input" required min="0" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} /></div>
-                <div><label className="label">Duración (min)</label><input type="number" className="input" required min="15" step="15" value={form.duration_minutes} onChange={e => setForm(p => ({ ...p, duration_minutes: parseInt(e.target.value) }))} /></div>
+                <div><label className="label" htmlFor="servicio-precio">Precio (COP)</label><input id="servicio-precio" type="number" className="input" required min="0" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="servicio-duracion">Duración (min)</label><input id="servicio-duracion" type="number" className="input" required min="15" step="15" value={form.duration_minutes} onChange={e => setForm(p => ({ ...p, duration_minutes: parseInt(e.target.value) }))} /></div>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} className="w-4 h-4 text-brand-600" />

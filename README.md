@@ -137,6 +137,10 @@ Ambas son operaciones online en MySQL 8: no bloquean escrituras ni obligan a par
 aplicación. La segunda es **obligatoria** — el código 2FA se guarda hasheado y un hash
 bcrypt ocupa 60 caracteres, así que sin ella el 2FA deja de funcionar.
 
+Si además vienes de una versión anterior a la corrección del juego de caracteres, puede
+que tengas tildes corrompidas en los datos iniciales («Lavado BÃ¡sico»). En `AUDITORIA.md`
+está la consulta para comprobarlo y la reparación, que **solo debe ejecutarse una vez**.
+
 ---
 
 ## ⚙️ Variables de entorno
@@ -267,6 +271,23 @@ motowash/
 react-hot-toast, date-fns.
 
 ---
+
+## 🧪 Pruebas end-to-end
+
+`e2e/` contiene una suite de Playwright que recorre la aplicación con un navegador real:
+los dos recorridos completos (cliente y administrador) y los caminos de error desde la
+interfaz. Es lo que destapó los siete hallazgos de la Fase 4.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+cd e2e && npm install && npx playwright install chromium
+npm test
+```
+
+La superposición de pruebas añade un buzón SMTP desechable (mailpit, en
+http://localhost:8025) sin el cual no se pueden recorrer el registro ni el 2FA, y sube los
+límites de tasa —que en producción bloquearían la suite a mitad—. Detalles en
+`e2e/README.md`.
 
 ## 📦 Otros despliegues
 

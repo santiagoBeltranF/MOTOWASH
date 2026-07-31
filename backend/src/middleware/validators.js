@@ -33,7 +33,8 @@ export const registerRules = [
 ]
 
 export const codigoRules = [
-  body('tempToken').trim().notEmpty().withMessage('Falta el token de la sesión'),
+  body('tempToken').trim().notEmpty()
+    .withMessage('Tu verificación caducó. Vuelve a iniciar sesión para recibir un código nuevo.'),
   body('code').trim().matches(FORMATO_CODIGO).withMessage('El código son 6 dígitos')
 ]
 

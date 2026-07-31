@@ -22,6 +22,14 @@ services:
 
   backend:
     environment:
+      # Limites de tasa subidos SOLO para las pruebas. Todas salen de la misma
+      # IP y agotaban el limite de produccion a mitad de la suite, con lo que
+      # fallaban por el limitador y no por la aplicacion. El codigo conserva el
+      # valor de produccion por defecto.
+      RATE_LIMIT_LOGIN_MAX: 500
+      RATE_LIMIT_REGISTER_MAX: 500
+      RATE_LIMIT_VERIFY_MAX: 500
+
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
       MAIL_USER: ""

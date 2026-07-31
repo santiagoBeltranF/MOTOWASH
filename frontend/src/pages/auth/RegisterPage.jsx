@@ -76,34 +76,34 @@ export default function RegisterPage() {
               <h2 className="font-display text-xl font-semibold text-gray-900 mb-6">Crear cuenta</h2>
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
-                  <label className="label">Nombre completo</label>
+                  <label className="label" htmlFor="reg-nombre">Nombre completo</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input type="text" required className="input pl-10" placeholder="Tu nombre completo"
+                    <input id="reg-nombre" type="text" required className="input pl-10" placeholder="Tu nombre completo"
                       value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Correo electrónico</label>
+                  <label className="label" htmlFor="reg-email">Correo electrónico</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input type="email" required className="input pl-10" placeholder="correo@ejemplo.com"
+                    <input id="reg-email" type="email" required className="input pl-10" placeholder="correo@ejemplo.com"
                       value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Teléfono (opcional)</label>
+                  <label className="label" htmlFor="reg-telefono">Teléfono (opcional)</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input type="tel" className="input pl-10" placeholder="+57 300 000 0000"
+                    <input id="reg-telefono" type="tel" className="input pl-10" placeholder="+57 300 000 0000"
                       value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Contraseña</label>
+                  <label className="label" htmlFor="reg-password">Contraseña</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input type={showPass ? 'text' : 'password'} required className="input pl-10 pr-10"
+                    <input id="reg-password" type={showPass ? 'text' : 'password'} required className="input pl-10 pr-10"
                       placeholder="Mínimo 8 caracteres" value={form.password}
                       onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
                     <button type="button" onClick={() => setShowPass(p => !p)}
@@ -113,10 +113,10 @@ export default function RegisterPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="label">Confirmar contraseña</label>
+                  <label className="label" htmlFor="reg-confirmar">Confirmar contraseña</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input type={showPass ? 'text' : 'password'} required className="input pl-10"
+                    <input id="reg-confirmar" type={showPass ? 'text' : 'password'} required className="input pl-10"
                       placeholder="Repite tu contraseña" value={form.confirm}
                       onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))} />
                   </div>

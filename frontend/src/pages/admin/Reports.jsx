@@ -106,17 +106,17 @@ export default function Reports() {
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="label">Desde</label>
-            <input type="date" className="input" value={filters.from} onChange={e => setFilters(p => ({ ...p, from: e.target.value }))} />
+            <label className="label" htmlFor="rep-desde">Desde</label>
+            <input id="rep-desde" type="date" className="input" value={filters.from} onChange={e => setFilters(p => ({ ...p, from: e.target.value }))} />
           </div>
           <div>
-            <label className="label">Hasta</label>
-            <input type="date" className="input" value={filters.to} onChange={e => setFilters(p => ({ ...p, to: e.target.value }))} />
+            <label className="label" htmlFor="rep-hasta">Hasta</label>
+            <input id="rep-hasta" type="date" className="input" value={filters.to} onChange={e => setFilters(p => ({ ...p, to: e.target.value }))} />
           </div>
           {tab === 1 && (
             <div>
-              <label className="label">Estado</label>
-              <select className="input" value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
+              <label className="label" htmlFor="rep-estado">Estado</label>
+              <select id="rep-estado" className="input" value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
                 <option value="">Todos</option>
                 <option value="confirmed">Confirmada</option>
                 <option value="completed">Completada</option>
@@ -127,8 +127,8 @@ export default function Reports() {
           )}
           {tab === 2 && (
             <div>
-              <label className="label">Buscar cliente</label>
-              <input type="text" className="input" placeholder="Nombre o correo..." value={filters.search}
+              <label className="label" htmlFor="rep-buscar">Buscar cliente</label>
+              <input id="rep-buscar" type="text" className="input" placeholder="Nombre o correo..." value={filters.search}
                 onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
             </div>
           )}

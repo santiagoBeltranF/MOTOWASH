@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bike, ShieldCheck, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,8 +8,18 @@ export default function Verify2FAPage() {
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const inputs = useRef([])
-  const { verify2FA } = useAuthStore()
+  const { verify2FA, pending2FA, descartar2FA } = useAuthStore()
   const navigate = useNavigate()
+
+  // Si se llega aqui sin un 2FA en curso —enlace directo, sesion descartada—
+  // se avisa y se devuelve al login, en vez de dejar una pantalla que no puede
+  // funcionar por mucho que se escriba el codigo correcto.
+  useEffect(() => {
+    if (!pending2FA) {
+      toast.error('Tu verificación caducó. Inicia sesión de nuevo.')
+      navigate('/login', { replace: true })
+    }
+  }, [pending2FA, navigate])
 
   const handleChange = (i, val) => {
     if (!/^\d?$/.test(val)) return
@@ -29,10 +39,18 @@ export default function Verify2FAPage() {
   const handleVerify = async (fullCode) => {
     setLoading(true)
     try {
-      await verify2FA(fullCode || code.join(''))
+      const { user } = await verify2FA(fullCode || code.join(''))
       toast.success('¡Bienvenido!')
-      navigate('/admin')
+      // Cada rol a su sitio. Antes se enviaba siempre a /admin y era la guarda
+      // de ruta la que rebotaba a los clientes a /client.
+      navigate(user?.role === 'admin' ? '/admin' : '/client', { replace: true })
     } catch (err) {
+      if (err.sesion2FAPerdida) {
+        toast.error('Tu verificación caducó. Inicia sesión de nuevo.')
+        descartar2FA()
+        navigate('/login', { replace: true })
+        return
+      }
       toast.error(err.response?.data?.message || 'Código incorrecto')
       setCode(['', '', '', '', '', ''])
       inputs.current[0]?.focus()

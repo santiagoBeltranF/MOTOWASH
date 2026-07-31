@@ -20,7 +20,9 @@ export default function LoginPage() {
         toast.success('Código enviado a tu correo')
         navigate('/verify-2fa')
       } else {
-        navigate('/admin')
+        // Cada rol a su panel. Antes iba siempre a /admin y era la guarda de
+        // ruta la que rebotaba a los clientes, con un parpadeo por el camino.
+        navigate(result.user?.role === 'admin' ? '/admin' : '/client', { replace: true })
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error al iniciar sesión')
@@ -47,10 +49,10 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="label">Correo electrónico</label>
+              <label className="label" htmlFor="login-email">Correo electrónico</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
+                <input id="login-email"
                   type="email" required autoComplete="email"
                   className="input pl-10"
                   placeholder="correo@ejemplo.com"
@@ -61,10 +63,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="label">Contraseña</label>
+              <label className="label" htmlFor="login-password">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
+                <input id="login-password"
                   type={showPass ? 'text' : 'password'} required autoComplete="current-password"
                   className="input pl-10 pr-10"
                   placeholder="••••••••"

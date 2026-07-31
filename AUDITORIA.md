@@ -374,6 +374,92 @@ Los identificadores C/I/M son estables: no se reutilizan aunque se cierren.
 - ✅ **Bloque C** — coordinación con el frontend: C3, C1, C8, M6
   *(al final no hizo falta cambiar ni un archivo del frontend: ver C3)*
 
+---
+
+## 🔬 Fase 4 — hallazgos de la verificación end-to-end
+
+Los siete salieron de recorrer la aplicación con un navegador real
+(`e2e/`, Playwright). **Ninguno aparece leyendo el código**, que es como se hicieron las
+fases 1–3. Dos de ellos (E3 y E4) los había introducido yo al contenerizar en la Fase 2.
+
+- [x] **E1 — Cualquier 401 recargaba la página y borraba el mensaje de error** ✅
+  `frontend/src/utils/api.js`
+  El interceptor trataba todo 401 como sesión caducada y hacía `window.location.href`.
+  Cuatro endpoints usan 401 para errores normales del usuario, así que sus mensajes
+  nunca llegaban a verse — incluido el contador de intentos de C4, que quedaba inútil.
+  *Corregido:* el backend marca con `code: 'SESION_INVALIDA'` únicamente los 401 que
+  significan «tu token ya no vale» (`middleware/auth.js`). El interceptor cierra sesión
+  solo ante ese código; el resto se propaga a la pantalla.
+  *Verificado:* login incorrecto conserva lo escrito y muestra el mensaje; el contador
+  del 2FA recorre «quedan 4 / 3 / 2 intentos», «queda 1 intento» y «demasiados intentos
+  fallidos»; lo mismo en `verify-register`; contraseña actual incorrecta no expulsa.
+
+- [x] **E2 — Recargar durante el 2FA dejaba al usuario atrapado** ✅
+  `frontend/src/store/authStore.js`, `pages/auth/Verify2FAPage.jsx`
+  `pending2FA` vivía solo en memoria de Zustand. Tras un F5 el código correcto se
+  rechazaba indefinidamente y no había salida.
+  *Corregido:* se persiste en **sessionStorage**. Se eligió frente a localStorage porque
+  muere al cerrar la pestaña (en un equipo compartido no queda un 2FA a medias
+  reutilizable) y frente a «detectar y devolver al login» porque eso arregla el síntoma,
+  no el caso real: quien recarga quiere continuar, no empezar de cero. El aviso claro se
+  mantiene para cuando el estado sí es inválido.
+  También se cambió el mensaje «Falta el token de la sesión» por «Tu verificación caducó.
+  Vuelve a iniciar sesión para recibir un código nuevo.»
+  *De paso:* login y 2FA ahora llevan a cada rol a su panel, en vez de mandar a todos a
+  `/admin` y dejar que la guarda de ruta rebotara a los clientes.
+
+- [x] **E3 — Recrear el backend dejaba la aplicación en 502** ✅ *(bug propio de la Fase 2)*
+  `frontend/nginx.conf`
+  nginx resolvía `backend` una sola vez al arrancar y cacheaba la IP para siempre. Como
+  Docker asigna IP nueva a cada contenedor recreado, **cada redespliegue rompía todo
+  `/api`** hasta reiniciar nginx a mano.
+  *Corregido:* `resolver 127.0.0.11` y destino en variable (`set $destino_api`), que es
+  lo que obliga a nginx a re-resolver en cada petición. Con variable ya no reescribe la
+  ruta, de ahí `$request_uri`.
+  *Verificado* forzando el escenario con contenedores señuelo: la IP del backend cambió
+  de `172.19.0.4` a `172.19.0.8` y nginx la siguió sin reiniciarse. Cero 502.
+
+- [x] **E4 — Los datos iniciales con tildes se guardaban corrompidos** ✅ *(bug propio de la Fase 2)*
+  `backend/src/config/database.sql`, `docker-compose.yml`
+  El `.sql` es UTF-8, pero MySQL lo ejecutaba con `character_set_client = latin1` y
+  guardaba los bytes doble-codificados: «Lavado B**Ã¡**sico», «agua a presi**Ã³**n»,
+  «Armenia, Quind**Ã­**o». Lo veía todo cliente al entrar a agendar.
+  *Corregido en la causa, no en las filas:* `SET NAMES utf8mb4` como primera instrucción
+  del script, más `--character-set-server=utf8mb4` en el servicio `db` para que ningún
+  cliente que no declare su juego de caracteres vuelva a caer en latin1.
+  *Verificado desde volumen limpio.* Migración manual para instalaciones existentes: ver
+  más abajo.
+
+- [x] **E5 — Tras guardar el perfil seguía el nombre viejo** ✅
+  `frontend/src/pages/client/ProfilePage.jsx`
+  El backend devolvía el usuario actualizado y la pantalla lo descartaba, así que
+  cabecera, avatar y tarjeta mantenían el nombre anterior hasta recargar.
+  *Corregido:* `setUser` en el store y la pantalla lo usa. De paso, el botón de cambiar
+  contraseña ahora tiene estado de carga, que tampoco tenía.
+
+- [x] **E6 — El asistente de reserva se quedaba clavado** ✅
+  `frontend/src/pages/client/BookPage.jsx`
+  Tras reservar o reagendar, pulsar «Agendar» en el menú no hacía nada: misma ruta, React
+  Router no remonta y `step` seguía en 4. La única salida era «Volver al inicio».
+  *Corregido:* se reinicia el asistente cuando cambia `location.key`, que React Router
+  renueva en cada pulsación del enlace.
+
+- [x] **E7 — Ningún `<label>` estaba asociado a su campo** ✅
+  9 archivos de `frontend/src/pages/`
+  Sin `htmlFor`/`id`, un lector de pantalla no anuncia el nombre de los campos y pulsar
+  la etiqueta no enfoca el control.
+  *Corregido:* 29 campos asociados en los 9 formularios. Las pruebas ya pueden usar
+  `getByLabel` en vez de seleccionar por posición, que era frágil.
+
+### Otros cambios de la Fase 4
+
+**Límites de tasa configurables por entorno**, con el valor de producción como defecto
+(`RATE_LIMIT_LOGIN_MAX=5`, etc.). Existe porque las pruebas salen todas de la misma IP y
+agotaban el límite a mitad de la suite, fallando por el limitador y no por la aplicación.
+Se suben en `docker-compose.test.yml`, nunca en el código.
+
+---
+
 ### Migraciones pendientes de aplicar en instalaciones existentes
 
 `database.sql` solo se ejecuta con el volumen vacío. Sobre una base con datos:
@@ -383,3 +469,31 @@ docker compose exec db mysql -u root -p motowash_db -e "
   CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);
   ALTER TABLE users MODIFY two_fa_code VARCHAR(255);"
 ```
+
+**Reparar las tildes corrompidas (E4).** La corrección actúa sobre la causa, así que las
+instalaciones nuevas nacen bien — pero las filas ya guardadas siguen dobles-codificadas.
+
+Primero comprueba si te afecta:
+
+```bash
+docker compose exec db mysql -u root -p motowash_db \
+  -e "SELECT name FROM services WHERE name LIKE '%Ã%' OR name LIKE '%Â%';"
+```
+
+Si esa consulta **no devuelve filas, no ejecutes nada más**: tus datos están sanos y la
+reparación los rompería. Si sí devuelve filas:
+
+```bash
+docker compose exec db mysql -u root -p motowash_db -e "
+  UPDATE services SET
+    name        = CONVERT(BINARY(CONVERT(name        USING latin1)) USING utf8mb4),
+    description = CONVERT(BINARY(CONVERT(description USING latin1)) USING utf8mb4)
+    WHERE name LIKE '%Ã%' OR description LIKE '%Ã%';
+  UPDATE settings SET
+    value = CONVERT(BINARY(CONVERT(value USING latin1)) USING utf8mb4)
+    WHERE value LIKE '%Ã%';"
+```
+
+⚠️ **Se ejecuta una sola vez.** Repetirla sobre datos ya reparados vuelve a corromperlos.
+Los `WHERE` acotan el daño, pero haz un volcado antes:
+`docker compose exec db mysqldump -u root -p motowash_db > respaldo.sql`

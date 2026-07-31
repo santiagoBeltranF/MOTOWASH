@@ -75,8 +75,8 @@ export default function Settings() {
             <div className="grid sm:grid-cols-2 gap-4">
               {section.fields.map(f => (
                 <div key={f.key}>
-                  <label className="label">{f.label}</label>
-                  <input type={f.type} className="input" value={settings[f.key] || ''}
+                  <label className="label" htmlFor={`ajuste-${f.key}`}>{f.label}</label>
+                  <input id={`ajuste-${f.key}`} type={f.type} className="input" value={settings[f.key] || ''}
                     onChange={e => set(f.key, e.target.value)} />
                 </div>
               ))}
