@@ -33,7 +33,11 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body
     const user = await queryOne('SELECT * FROM users WHERE email = ? AND is_active = TRUE', [email])
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Un invitado no tiene credenciales: password es NULL. Sin este corte,
+    // bcrypt.compare recibiria null y reventaria en vez de devolver 401.
+    // El mensaje es el mismo que el de credenciales erroneas, a proposito: no
+    // hay motivo para revelar que ese correo pertenece a un invitado.
+    if (!user || user.is_guest || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Correo o contraseña incorrectos' })
     }
     if (user.two_fa_enabled) {

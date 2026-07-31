@@ -1,8 +1,10 @@
 import { query, queryOne } from '../config/db.js'
+import { esPersonal } from '../middleware/auth.js'
 
 export const getServices = async (req, res, next) => {
   try {
-    const isAdmin = req.user?.role === 'admin'
+    // El personal ve tambien los servicios desactivados; el cliente no.
+    const isAdmin = esPersonal(req.user)
     const sql = isAdmin
       ? 'SELECT * FROM services ORDER BY name'
       : 'SELECT * FROM services WHERE is_active=TRUE ORDER BY name'

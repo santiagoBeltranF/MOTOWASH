@@ -127,3 +127,56 @@ export const horarioRules = [
 export const settingsRules = [
   body('settings').isObject().withMessage('La configuración debe venir como un objeto')
 ]
+
+// --- Invitados y agendamiento desde el panel -------------------------------
+
+// Deliberadamente permisiva: el formato colombiano de moto es 3 letras, 2
+// digitos y 1 letra, pero rechazar en el mostrador una placa extranjera o una
+// temporal es peor que aceptar una rara. Se normaliza antes de guardar.
+const FORMATO_PLACA = /^[A-Za-z0-9\s-]{5,10}$/
+
+export const invitadoRules = [
+  body('name').trim().notEmpty().withMessage('El nombre es obligatorio')
+    .isLength({ max: 100 }).withMessage('El nombre no puede pasar de 100 caracteres'),
+  body('phone').optional({ values: 'falsy' }).trim()
+    .isLength({ max: 20 }).withMessage('El teléfono no puede pasar de 20 caracteres'),
+  body('email').optional({ values: 'falsy' }).isEmail().withMessage('Correo con formato inválido').normalizeEmail(),
+  body('document_id').optional({ values: 'falsy' }).trim()
+    .isLength({ max: 30 }).withMessage('El documento no puede pasar de 30 caracteres')
+]
+
+export const convertirInvitadoRules = [
+  ...idParam,
+  body('email').isEmail().withMessage('Correo con formato inválido').normalizeEmail(),
+  body('password').isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres')
+]
+
+export const citaPanelRules = [
+  body('client_id').isInt({ min: 1 }).withMessage('Cliente inválido'),
+  body('service_id').isInt({ min: 1 }).withMessage('Servicio inválido'),
+  body('appointment_date').matches(FORMATO_FECHA).withMessage('Fecha con formato inválido. Se espera AAAA-MM-DD.'),
+  body('start_time').matches(FORMATO_HORA).withMessage('Hora con formato inválido. Se espera HH:MM.'),
+  // Obligatoria desde el panel; para el cliente sigue siendo opcional.
+  body('plate').trim().notEmpty().withMessage('La placa es obligatoria')
+    .matches(FORMATO_PLACA).withMessage('Placa con formato inválido'),
+  body('category_id').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('Categoría de moto inválida'),
+  body('notes').optional({ values: 'falsy' }).trim()
+    .isLength({ max: 1000 }).withMessage('Las notas no pueden pasar de 1000 caracteres'),
+  body('allow_overbook').optional().isBoolean().withMessage('Confirmación de sobrecupo inválida')
+]
+
+export const categoriaRules = [
+  ...idParam,
+  body('name').trim().notEmpty().withMessage('El nombre es obligatorio')
+    .isLength({ max: 60 }).withMessage('El nombre no puede pasar de 60 caracteres'),
+  body('description').optional({ values: 'null' }).trim()
+    .isLength({ max: 200 }).withMessage('La descripción no puede pasar de 200 caracteres'),
+  body('is_active').isBoolean().withMessage('El estado debe ser verdadero o falso')
+]
+
+export const preciosRules = [
+  body('prices').isArray({ min: 1 }).withMessage('Debes enviar al menos un precio'),
+  body('prices.*.service_id').isInt({ min: 1 }).withMessage('Servicio inválido'),
+  body('prices.*.category_id').isInt({ min: 1 }).withMessage('Categoría inválida'),
+  body('prices.*.price').isFloat({ min: 0 }).withMessage('El precio debe ser un número mayor o igual a 0')
+]

@@ -1,15 +1,18 @@
 import express from 'express'
 import rateLimit from 'express-rate-limit'
-import { authenticate, requireAdmin } from '../middleware/auth.js'
+import { authenticate, requireAdmin, requireStaff } from '../middleware/auth.js'
 import { validar } from '../middleware/validate.js'
 import {
   idParam, loginRules, registerRules, codigoRules, perfilRules, passwordRules,
   servicioRules, crearCitaRules, reagendarRules, estadoCitaRules,
-  crearPromocionRules, actualizarPromocionRules, horarioRules, settingsRules
+  crearPromocionRules, actualizarPromocionRules, horarioRules, settingsRules,
+  invitadoRules, convertirInvitadoRules, citaPanelRules, categoriaRules, preciosRules
 } from '../middleware/validators.js'
 import { login, verify2FA, register, verifyRegister, getMe, updateProfile, changePassword } from '../controllers/authController.js'
 import { getServices, createService, updateService, deleteService } from '../controllers/serviceController.js'
-import { getAvailableSlots, createAppointment, getAppointments, cancelAppointment, updateAppointmentStatus, rescheduleAppointment, getActivePendingAppointment } from '../controllers/appointmentController.js'
+import { getAvailableSlots, createAppointment, createAppointmentFromPanel, getAppointments, cancelAppointment, updateAppointmentStatus, rescheduleAppointment, getActivePendingAppointment } from '../controllers/appointmentController.js'
+import { createGuest, convertGuest, searchClients } from '../controllers/guestController.js'
+import { getCategories, updateCategory, getPriceMatrix, updatePrices } from '../controllers/categoryController.js'
 import { getPromotions, getActivePromotion, createPromotion, updatePromotion, deletePromotion } from '../controllers/promotionController.js'
 import { getSchedule, updateSchedule, getSettings, updateSettings, getClients, toggleClientStatus } from '../controllers/settingsController.js'
 import { getDashboardStats, getRevenueReport, getClientsReport, getAppointmentsReport } from '../controllers/reportController.js'
@@ -72,9 +75,23 @@ router.get('/appointments/slots', authenticate, getAvailableSlots)
 router.get('/appointments', authenticate, getAppointments)
 router.post('/appointments', authenticate, crearCitaRules, validar, createAppointment)
 router.patch('/appointments/:id/cancel', authenticate, idParam, validar, cancelAppointment)
-router.patch('/appointments/:id/status', authenticate, requireAdmin, estadoCitaRules, validar, updateAppointmentStatus)
+router.patch('/appointments/:id/status', authenticate, requireStaff, estadoCitaRules, validar, updateAppointmentStatus)
 router.get('/appointments/active-pending', authenticate, getActivePendingAppointment)
 router.patch('/appointments/:id/reschedule', authenticate, reagendarRules, validar, rescheduleAppointment)
+
+// Agendamiento desde el panel (admin o cajero)
+router.post('/appointments/panel', authenticate, requireStaff, citaPanelRules, validar, createAppointmentFromPanel)
+
+// Clientes invitados y busqueda de mostrador
+router.get('/clients/search', authenticate, requireStaff, searchClients)
+router.post('/clients/guest', authenticate, requireStaff, invitadoRules, validar, createGuest)
+router.post('/clients/:id/convert', authenticate, requireStaff, convertirInvitadoRules, validar, convertGuest)
+
+// Categorias de moto y precios por categoria
+router.get('/categories', authenticate, getCategories)
+router.put('/categories/:id', authenticate, requireAdmin, categoriaRules, validar, updateCategory)
+router.get('/service-prices', authenticate, requireStaff, getPriceMatrix)
+router.put('/service-prices', authenticate, requireAdmin, preciosRules, validar, updatePrices)
 
 // Promotions
 router.get('/promotions', authenticate, requireAdmin, getPromotions)
@@ -88,7 +105,7 @@ router.get('/schedule', authenticate, getSchedule)
 router.put('/schedule', authenticate, requireAdmin, horarioRules, validar, updateSchedule)
 router.get('/settings', authenticate, requireAdmin, getSettings)
 router.put('/settings', authenticate, requireAdmin, settingsRules, validar, updateSettings)
-router.get('/clients', authenticate, requireAdmin, getClients)
+router.get('/clients', authenticate, requireStaff, getClients)
 router.patch('/clients/:id/toggle', authenticate, requireAdmin, idParam, validar, toggleClientStatus)
 
 // Reports (Admin)

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bike, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
+import { inicioDe } from '../../App'
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -22,7 +23,7 @@ export default function LoginPage() {
       } else {
         // Cada rol a su panel. Antes iba siempre a /admin y era la guarda de
         // ruta la que rebotaba a los clientes, con un parpadeo por el camino.
-        navigate(result.user?.role === 'admin' ? '/admin' : '/client', { replace: true })
+        navigate(result.inicioDe(result.user), { replace: true })
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error al iniciar sesión')

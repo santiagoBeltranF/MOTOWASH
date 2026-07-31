@@ -18,10 +18,18 @@ USE motowash_db;
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
-  email VARCHAR(150) NOT NULL UNIQUE,
-  password VARCHAR(255) NOT NULL,
+  -- email y password admiten NULL porque un INVITADO no tiene credenciales.
+  -- MySQL permite varios NULL en un indice UNIQUE, asi que N invitados sin
+  -- correo conviven sin chocar.
+  email VARCHAR(150) NULL UNIQUE,
+  password VARCHAR(255) NULL,
   phone VARCHAR(20),
-  role ENUM('admin', 'client') NOT NULL DEFAULT 'client',
+  document_id VARCHAR(30),
+  role ENUM('admin', 'cashier', 'client') NOT NULL DEFAULT 'client',
+  -- Cliente creado desde el mostrador, sin cuenta. Convertirlo en cuenta es
+  -- rellenar email/password y bajar esta bandera: el id no cambia y conserva
+  -- todo su historial.
+  is_guest BOOLEAN NOT NULL DEFAULT FALSE,
   is_active BOOLEAN DEFAULT TRUE,
   two_fa_enabled BOOLEAN DEFAULT TRUE,
   -- Guarda el hash bcrypt del codigo, no el codigo (hallazgo M6). Un hash
@@ -70,11 +78,37 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Categorias de moto. Un mismo lavado no cuesta igual en una scooter que en
+-- una de alto cilindraje.
+CREATE TABLE IF NOT EXISTS motorcycle_categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(60) NOT NULL UNIQUE,
+  description VARCHAR(200),
+  sort_order TINYINT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Precio efectivo por servicio y categoria. services.price se conserva como
+-- respaldo y valor por defecto.
+CREATE TABLE IF NOT EXISTS service_prices (
+  service_id INT NOT NULL,
+  category_id INT NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (service_id, category_id),
+  FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES motorcycle_categories(id) ON DELETE CASCADE
+);
+
 -- Citas
 CREATE TABLE IF NOT EXISTS appointments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   client_id INT NOT NULL,
   service_id INT NOT NULL,
+  -- Normalizada: mayusculas, sin espacios ni guiones.
+  plate VARCHAR(10),
+  category_id INT,
   appointment_date DATE NOT NULL,
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
@@ -82,10 +116,21 @@ CREATE TABLE IF NOT EXISTS appointments (
   notes TEXT,
   final_price DECIMAL(10,2),
   discount_applied DECIMAL(5,2) DEFAULT 0,
+  created_by INT,
+  source ENUM('client','panel') NOT NULL DEFAULT 'client',
+  -- Creada por encima de max_appointments_per_slot. El panel exige confirmacion
+  -- explicita antes de ponerla en TRUE; el autoservicio nunca puede.
+  is_overbooked BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Quien atendio el lavado. NADIE LA ESCRIBE TODAVIA: reservada para el dia
+  -- que haya comisiones por lavador.
+  attended_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT
+  FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
+  FOREIGN KEY (category_id) REFERENCES motorcycle_categories(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (attended_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Promociones
@@ -148,6 +193,9 @@ CREATE INDEX idx_promotions_dates ON promotions(starts_at, ends_at);
 -- aplicacion. Si el indice ya existe, MySQL responde con error 1061 y no pasa
 -- nada mas.
 CREATE INDEX idx_appointments_date_time ON appointments(appointment_date, start_time);
+CREATE INDEX idx_appointments_plate ON appointments(plate);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_phone ON users(phone);
 
 -- ============================================
 -- DATOS INICIALES
@@ -180,6 +228,19 @@ INSERT INTO schedule_config (day_of_week, is_open, open_time, close_time) VALUES
 (4, TRUE,  '08:00:00', '18:00:00'),
 (5, TRUE,  '08:00:00', '18:00:00'),
 (6, TRUE,  '08:00:00', '14:00:00');
+
+-- Categorias de moto. «Media» nace inactiva: si el negocio la pide, se activa
+-- desde la aplicacion sin necesidad de migrar.
+INSERT INTO motorcycle_categories (name, description, sort_order, is_active) VALUES
+('Scooter', 'Automáticas tipo scooter', 1, TRUE),
+('Baja',    'Hasta 150cc',              2, TRUE),
+('Media',   'De 151cc a 350cc',         3, FALSE),
+('Alta',    'Más de 350cc',             4, TRUE);
+
+-- Cada servicio arranca con su precio actual en las cuatro categorias, tambien
+-- en la inactiva, para que activarla no requiera migracion.
+INSERT INTO service_prices (service_id, category_id, price)
+  SELECT s.id, c.id, s.price FROM services s CROSS JOIN motorcycle_categories c;
 
 -- Configuración general
 INSERT INTO settings (key_name, value, label) VALUES

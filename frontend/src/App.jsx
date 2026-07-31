@@ -18,16 +18,20 @@ import BookPage from './pages/client/BookPage'
 import MyAppointments from './pages/client/MyAppointments'
 import ProfilePage from './pages/client/ProfilePage'
 
-const PrivateRoute = ({ children, role }) => {
+// El panel lo comparten admin y cajero; dentro, cada uno ve lo suyo.
+export const esPersonal = (user) => user?.role === 'admin' || user?.role === 'cashier'
+export const inicioDe = (user) => (esPersonal(user) ? '/admin' : '/client')
+
+const PrivateRoute = ({ children, roles }) => {
   const { user, token } = useAuthStore()
   if (!token || !user) return <Navigate to="/login" replace />
-  if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin' : '/client'} replace />
+  if (roles && !roles.includes(user.role)) return <Navigate to={inicioDe(user)} replace />
   return children
 }
 
 const GuestRoute = ({ children }) => {
   const { user } = useAuthStore()
-  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : '/client'} replace />
+  if (user) return <Navigate to={inicioDe(user)} replace />
   return children
 }
 
@@ -51,19 +55,19 @@ export default function App() {
       <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
       <Route path="/verify-2fa" element={<GuestRoute><Verify2FAPage /></GuestRoute>} />
 
-      <Route path="/admin" element={<PrivateRoute role="admin"><AdminLayout /></PrivateRoute>}>
+      <Route path="/admin" element={<PrivateRoute roles={['admin', 'cashier']}><AdminLayout /></PrivateRoute>}>
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="services" element={<Services />} />
-        <Route path="schedule" element={<Schedule />} />
+        <Route path="services" element={<PrivateRoute roles={['admin']}><Services /></PrivateRoute>} />
+        <Route path="schedule" element={<PrivateRoute roles={['admin']}><Schedule /></PrivateRoute>} />
         <Route path="appointments" element={<Appointments />} />
-        <Route path="promotions" element={<Promotions />} />
+        <Route path="promotions" element={<PrivateRoute roles={['admin']}><Promotions /></PrivateRoute>} />
         <Route path="clients" element={<Clients />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="reports" element={<PrivateRoute roles={['admin']}><Reports /></PrivateRoute>} />
+        <Route path="settings" element={<PrivateRoute roles={['admin']}><Settings /></PrivateRoute>} />
       </Route>
 
-      <Route path="/client" element={<PrivateRoute role="client"><ClientLayout /></PrivateRoute>}>
+      <Route path="/client" element={<PrivateRoute roles={['client']}><ClientLayout /></PrivateRoute>}>
         <Route index element={<Navigate to="/client/book" replace />} />
         <Route path="book" element={<BookPage />} />
         <Route path="appointments" element={<MyAppointments />} />

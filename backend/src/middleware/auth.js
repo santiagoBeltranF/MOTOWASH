@@ -29,9 +29,25 @@ export const authenticate = async (req, res, next) => {
   }
 }
 
+// Roles que trabajan en el negocio, por oposicion a los clientes. Se usa como
+// predicado en los controladores en vez de comparar contra 'admin' a mano.
+//
+// Antes media docena de sitios usaban `role === 'admin'` como sinonimo de «no
+// es un cliente». Al aparecer el rol de cajero eso no fallaba: degradaba al
+// cajero a cliente en silencio, que es peor.
+export const esPersonal = (user) => user?.role === 'admin' || user?.role === 'cashier'
+
 export const requireAdmin = (req, res, next) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ message: 'Acceso denegado. Se requiere rol de administrador.' })
+  }
+  next()
+}
+
+// Admin o cajero: caja, cobros, citas y clientes.
+export const requireStaff = (req, res, next) => {
+  if (!esPersonal(req.user)) {
+    return res.status(403).json({ message: 'Acceso denegado. Se requiere rol de administrador o cajero.' })
   }
   next()
 }

@@ -3,15 +3,17 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { Bike, LayoutDashboard, Wrench, Calendar, Clock, Tag, Users, BarChart3, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
+// `soloAdmin` marca lo que el cajero no debe ver: configuración, servicios,
+// promociones, horarios y reportes del negocio.
 const navItems = [
-  { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/admin/services', icon: Wrench, label: 'Servicios' },
-  { to: '/admin/schedule', icon: Clock, label: 'Horarios' },
+  { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', soloAdmin: true },
+  { to: '/admin/services', icon: Wrench, label: 'Servicios', soloAdmin: true },
+  { to: '/admin/schedule', icon: Clock, label: 'Horarios', soloAdmin: true },
   { to: '/admin/appointments', icon: Calendar, label: 'Citas' },
-  { to: '/admin/promotions', icon: Tag, label: 'Promociones' },
+  { to: '/admin/promotions', icon: Tag, label: 'Promociones', soloAdmin: true },
   { to: '/admin/clients', icon: Users, label: 'Clientes' },
-  { to: '/admin/reports', icon: BarChart3, label: 'Reportes' },
-  { to: '/admin/settings', icon: Settings, label: 'Configuración' },
+  { to: '/admin/reports', icon: BarChart3, label: 'Reportes', soloAdmin: true },
+  { to: '/admin/settings', icon: Settings, label: 'Configuración', soloAdmin: true },
 ]
 
 export default function AdminLayout() {
@@ -30,7 +32,7 @@ export default function AdminLayout() {
             </div>
             <div>
               <p className="font-display font-bold text-gray-900 leading-tight">MotoWash</p>
-              <p className="text-xs text-gray-400">Panel Admin</p>
+              <p className="text-xs text-gray-400">{user?.role === 'cashier' ? 'Caja' : 'Panel Admin'}</p>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
@@ -39,7 +41,7 @@ export default function AdminLayout() {
 
           {/* Nav */}
           <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-            {navItems.map(({ to, icon: Icon, label }) => (
+            {navItems.filter(i => !i.soloAdmin || user?.role === 'admin').map(({ to, icon: Icon, label }) => (
               <NavLink key={to} to={to}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Search, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, AlertTriangle } from 'lucide-react'
 import api from '../../utils/api'
 import Paginacion from '../../components/Paginacion'
+import NuevaCitaPanel from '../../components/NuevaCitaPanel'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -36,7 +37,8 @@ const formatAppointmentDate = (dateVal) => {
 export default function Appointments() {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ status: '', date: '' })
+  const [filters, setFilters] = useState({ status: '', date: '', plate: '' })
+  const [modalNueva, setModalNueva] = useState(false)
   const [pagina, setPagina] = useState(1)
   const [meta, setMeta] = useState({ total: 0, totalPages: 1, limit: 20 })
 
@@ -46,6 +48,7 @@ export default function Appointments() {
       const params = new URLSearchParams()
       if (filters.status) params.set('status', filters.status)
       if (filters.date) params.set('date', filters.date)
+      if (filters.plate) params.set('plate', filters.plate)
       params.set('page', pagina)
       const res = await api.get(`/appointments?${params}`)
       setAppointments(res.data.appointments ?? [])
@@ -57,7 +60,7 @@ export default function Appointments() {
   useEffect(() => { load() }, [filters, pagina])
   // Cambiar de filtro devuelve a la primera pagina: quedarse en la 7 de un
   // listado que ahora tiene 2 mostraria una tabla vacia sin explicacion.
-  useEffect(() => { setPagina(1) }, [filters.status, filters.date])
+  useEffect(() => { setPagina(1) }, [filters.status, filters.date, filters.plate])
 
   // Captura el mensaje dinámico de error del servidor para mostrarlo en pantalla
   const updateStatus = async (id, status) => {
@@ -78,9 +81,14 @@ export default function Appointments() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-gray-900">Citas</h1>
-        <p className="text-gray-500 text-sm mt-1">Gestión de todas las citas agendadas</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-gray-900">Citas</h1>
+          <p className="text-gray-500 text-sm mt-1">Gestión de todas las citas agendadas</p>
+        </div>
+        <button onClick={() => setModalNueva(true)} className="btn-primary">
+          <Plus className="w-4 h-4" /> Nueva cita
+        </button>
       </div>
 
       <div className="card">
@@ -99,6 +107,14 @@ export default function Appointments() {
             <label className="label" htmlFor="citas-fecha">Fecha</label>
             <input id="citas-fecha" type="date" className="input" value={filters.date} onChange={e => setFilters(p => ({ ...p, date: e.target.value }))} />
           </div>
+          <div>
+            <label className="label" htmlFor="citas-placa">Placa</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input id="citas-placa" className="input pl-10 uppercase" placeholder="ABC12D"
+                value={filters.plate} onChange={e => setFilters(p => ({ ...p, plate: e.target.value }))} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -111,6 +127,7 @@ export default function Appointments() {
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   <th className="table-th">Cliente</th>
+                  <th className="table-th">Placa</th>
                   <th className="table-th">Servicio</th>
                   <th className="table-th">Fecha y hora</th>
                   <th className="table-th">Estado</th>
@@ -122,15 +139,30 @@ export default function Appointments() {
                 {appointments.map(a => (
                   <tr key={a.id} className="table-tr">
                     <td className="table-td">
-                      <div className="font-medium">{a.client_name}</div>
+                      <div className="font-medium flex items-center gap-1.5">
+                        {a.client_name}
+                        {a.client_is_guest ? <span className="badge-yellow">Invitado</span> : null}
+                      </div>
                       <div className="text-xs text-gray-400">{a.client_phone}</div>
                     </td>
-                    <td className="table-td">{a.service_name}</td>
+                    <td className="table-td font-mono text-sm">{a.plate || '—'}</td>
+                    <td className="table-td">
+                      {a.service_name}
+                      {a.category_name ? <div className="text-xs text-gray-400">{a.category_name}</div> : null}
+                    </td>
                     <td className="table-td">
                       <div className="font-medium">{formatAppointmentDate(a.appointment_date)}</div>
                       <div className="text-xs text-gray-400">{a.start_time?.slice(0,5)} - {a.end_time?.slice(0,5)}</div>
                     </td>
-                    <td className="table-td"><span className={statusBadge[a.status]}>{statusLabel[a.status]}</span></td>
+                    <td className="table-td">
+                      <span className={statusBadge[a.status]}>{statusLabel[a.status]}</span>
+                      {/* El dueño quiere ver cuántas veces se sobrepasó la capacidad */}
+                      {a.is_overbooked ? (
+                        <span className="badge-red ml-1 inline-flex items-center gap-1" title="Creada por encima del cupo de la franja">
+                          <AlertTriangle className="w-3 h-3" /> Sobrecupo
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="table-td font-semibold text-brand-700">${Number(a.final_price || 0).toLocaleString('es-CO')}</td>
                     <td className="table-td">
                       <div className="flex gap-1">
@@ -153,7 +185,7 @@ export default function Appointments() {
                   </tr>
                 ))}
                 {!appointments.length && (
-                  <tr><td colSpan={6} className="table-td text-center text-gray-400 py-12">No hay citas para mostrar</td></tr>
+                  <tr><td colSpan={7} className="table-td text-center text-gray-400 py-12">No hay citas para mostrar</td></tr>
                 )}
               </tbody>
             </table>
@@ -164,6 +196,8 @@ export default function Appointments() {
             onChange={setPagina} etiqueta="citas" />
         )}
       </div>
+
+      <NuevaCitaPanel abierto={modalNueva} onCerrar={() => setModalNueva(false)} onCreada={load} />
     </div>
   )
 }

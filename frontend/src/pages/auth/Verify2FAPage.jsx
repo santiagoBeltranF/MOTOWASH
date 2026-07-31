@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bike, ShieldCheck, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore'
+import { inicioDe } from '../../App'
 
 export default function Verify2FAPage() {
   const [code, setCode] = useState(['', '', '', '', '', ''])
@@ -43,7 +44,7 @@ export default function Verify2FAPage() {
       toast.success('¡Bienvenido!')
       // Cada rol a su sitio. Antes se enviaba siempre a /admin y era la guarda
       // de ruta la que rebotaba a los clientes a /client.
-      navigate(user?.role === 'admin' ? '/admin' : '/client', { replace: true })
+      navigate(inicioDe(user), { replace: true })
     } catch (err) {
       if (err.sesion2FAPerdida) {
         toast.error('Tu verificación caducó. Inicia sesión de nuevo.')
